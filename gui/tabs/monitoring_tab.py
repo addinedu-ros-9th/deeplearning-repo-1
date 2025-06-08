@@ -129,14 +129,32 @@ class MonitoringTab(QWidget):
     def clean_up(self):
         if not self.is_connected: return
         print("모니터링 탭 리소스 정리 시작...")
-        self.send_command_to_server("video_control", {"action": "stop"}); time.sleep(0.1)
-        if self.control_worker: self.control_worker.stop()
-        if self.control_thread: self.control_thread.quit(); self.control_thread.wait()
+
+        # 1. 사용자에게 즉각적인 피드백을 주기 위해 UI를 먼저 업데이트합니다.
+        self.live_feed_label.setText("실시간 영상 대기 중...")
+        self.live_feed_label.repaint() # UI 즉시 갱신
+
+        # 2. 서버에 영상 중단 요청을 보냅니다.
+        self.send_command_to_server("video_control", {"action": "stop"})
+        time.sleep(0.1) # 서버가 명령을 처리할 시간을 줍니다.
+
+        # 3. 스레드를 안전하게 종료합니다.
         if self.video_worker: self.video_worker.stop()
-        if self.video_thread: self.video_thread.quit(); self.video_thread.wait()
+        if self.video_thread:
+            self.video_thread.quit()
+            self.video_thread.wait(1000) # 최대 1초만 기다립니다.
+
+        if self.control_worker: self.control_worker.stop()
+        if self.control_thread:
+            self.control_thread.quit()
+            self.control_thread.wait(1000) # 최대 1초만 기다립니다.
+
+        # 4. 상태를 최종적으로 업데이트합니다.
         self.is_connected = False
-        self.btn_activate_robot.setText("원격 연결 시작"); self.update_robot_status("N/A", "연결되지 않음")
-        self.live_feed_label.setText("실시간 영상 대기 중..."); print("모니터링 탭 리소스 정리 완료.")
+        self.btn_activate_robot.setText("원격 연결 시작")
+        self.update_robot_status("N/A", "연결되지 않음")
+        
+        print("모니터링 탭 리소스 정리 완료.")
         
     def draw_simplified_map(self):
         label_size = self.map_display_label.size()
