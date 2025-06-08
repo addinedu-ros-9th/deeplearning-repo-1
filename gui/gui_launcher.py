@@ -7,3 +7,5 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_app = MainApplication(app)
     sys.exit(app.exec_())
+
+# python -m gui.gui_launcher
