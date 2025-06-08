@@ -171,7 +171,14 @@
              </property>
             </widget>
            </item>
-           <item row="2" column="1">
+           <item row="2" column="0">
+            <widget class="QPushButton" name="btn_human_decision">
+             <property name="text">
+              <string>Human Decision</string>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="2">
             <widget class="QPushButton" name="btn_capture_image">
              <property name="text">
               <string>btn_capture_image</string>

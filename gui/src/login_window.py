@@ -1,53 +1,73 @@
 # gui/src/login_window.py
-
-from PyQt5.QtWidgets import QMainWindow, QMessageBox, QLineEdit
-from PyQt5 import uic
 import os
+import socket
+from PyQt5.QtWidgets import QMainWindow, QMessageBox
+from PyQt5.QtCore import QObject, QThread, pyqtSignal
+from PyQt5 import uic
+from .main_window import MainWindow # 같은 src 폴더 내의 main_window 임포트
+from shared.protocols import create_request, parse_message # shared 폴더의 protocols 임포트
 
-from backend.auth.auth_manager import AuthManager
-from gui.src.main_window import MainWindow # 단일 MainWindow 클래스 임포트
+# 네트워크 통신 워커 (이전과 동일)
+class LoginWorker(QObject):
+    finished = pyqtSignal(dict)
 
+    def __init__(self, user_id, password, server_addr=('127.0.0.1', 9999)):
+        super().__init__()
+        self.user_id, self.password = user_id, password
+        self.server_addr = server_addr
 
+    def run(self):
+        try:
+            req_bytes = create_request("login", {"id": self.user_id, "password": self.password})
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect(self.server_addr)
+                s.sendall(req_bytes)
+                res_bytes = s.recv(1024)
+                response = parse_message(res_bytes)
+                self.finished.emit(response)
+        except Exception as e:
+            self.finished.emit({"status": "error", "message": f"서버 통신 오류: {e}"})
+
+# LoginWindow 클래스 (이전과 동일)
 class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-
-        # UI 파일 경로
-        # login_window.py (현재 위치: gui/src) 에서 login.ui (실제 위치: gui/ui) 로 접근하기 위한 경로 설정
+        # ui 파일 경로는 현재 파일 위치(__file__) 기준으로 재계산
         ui_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui", "login.ui")
         uic.loadUi(ui_path, self)
+        
+        self.btn_login.clicked.connect(self.attempt_login)
+        self.input_pw.returnPressed.connect(self.attempt_login)
+        self.main_window = None
 
-        # 비밀번호 입력 필드 설정
-        self.input_pw.setEchoMode(QLineEdit.Password)
+    def attempt_login(self):
+        # ... (이전 QThread 관련 코드와 완벽히 동일)
+        self.btn_login.setEnabled(False)
+        self.btn_login.setText("로그인 중...")
 
-        # DB 인증 관리자 설정
-        self.auth_manager = AuthManager({
-            "host": "34.47.96.177",
-            "user": "root",
-            "password": "qwer1234!@#$",
-            "database": "neighbot_db"
-        })
+        self.thread = QThread()
+        self.worker = LoginWorker(self.input_id.text().strip(), self.input_pw.text().strip())
+        self.worker.moveToThread(self.thread)
 
-        # 로그인 버튼과 비밀번호 입력 필드의 Enter 키 이벤트를 핸들러에 연결
-        self.btn_login.clicked.connect(self.handle_login)
-        self.input_pw.returnPressed.connect(self.handle_login)
+        self.thread.started.connect(self.worker.run)
+        self.worker.finished.connect(self.on_login_finished)
+        self.worker.finished.connect(self.thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.start()
 
-        self.main_window = None # 메인 윈도우 인스턴스를 저장할 변수
+    def on_login_finished(self, response):
+        # ... (이전 코드와 완벽히 동일)
+        self.btn_login.setEnabled(True)
+        self.btn_login.setText("로그인")
+        status, message = response.get("status"), response.get("message")
 
-
-    def handle_login(self):
-        user_id = self.input_id.text().strip()
-        password = self.input_pw.text().strip()
-
-        success = self.auth_manager.verify_user(user_id, password) # 인증 성공 여부만 반환
-        if success:
-            QMessageBox.information(self, "로그인 성공", f"✅ {user_id}님, 환영합니다!") # PyQt 메시지 (한국어)
-            self.open_main() # 단일 메인 윈도우 열기
+        if status == "success":
+            QMessageBox.information(self, "로그인 성공", message)
+            self.main_window = MainWindow()
+            self.main_window.show()
+            self.close()
+        elif status == "failed":
+            QMessageBox.warning(self, "로그인 실패", message)
         else:
-            QMessageBox.warning(self, "로그인 실패", "❌ 아이디 또는 비밀번호가 잘못되었습니다.") # PyQt 메시지 (한국어)
-
-    def open_main(self):
-        # 모든 로그인 성공 시 단일 MainWindow를 띄웁니다.
-        self.main_window = MainWindow() # 단일 MainWindow 인스턴스 생성
-        self.main_window.show() # 메인 윈도우 표시
-        self.close() # 로그인 윈도우 닫기
+            QMessageBox.critical(self, "오류", message)
