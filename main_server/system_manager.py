@@ -1,9 +1,10 @@
 # main_server/system_manager.py
 import socket, threading, queue, time, json, cv2, numpy as np
+# 각 클라스들
 from .db_manager import DBManager
 from .image_manager import ImageManager
-# RobotCommander를 임포트합니다.
-from .robot_commander import RobotCommander
+from .robot_commander import RobotCommander 
+
 from shared.protocols import parse_message, create_response
 
 class SystemManager:
@@ -46,7 +47,7 @@ class SystemManager:
         print("[서버] 모든 서비스 시작됨. GUI와 로봇의 연결을 기다립니다...")
         while True: time.sleep(10) # sleep 시간은 아무값이나 기능상 아무 상관 없음
 
-    def _accept_gui_connections(self): # GUI와의 연결 수락
+    def _accept_gui_connections(self): # gui와의 연결 수락
         self.gui_server_socket.listen()
         while True:
             conn, addr = self.gui_server_socket.accept()
@@ -100,7 +101,7 @@ class SystemManager:
                     del self.gui_connections[conn]
             conn.close()
 
-    def _send_events_to_gui(self, conn, event_q):  # GUI 클라이언트에게 도착 알림 같은 이벤트를 주기적으로 전송하는 함수
+    def _send_events_to_gui(self, conn, event_q):  # gui에게 도착 알림 같은 이벤트를 주기적으로 전송하는 함수
         while conn in self.gui_connections:  # 해당 연결이 아직 살아 있는 동안 반복
             try:
                 event = event_q.get(timeout=1)  # GUI에게 보낼 이벤트가 큐에 있기를 1초간 기다려 꺼냄 (timeout 을 넣어야 프로그램이 안멈추고 계속 돌아감)
@@ -112,7 +113,7 @@ class SystemManager:
             except Exception:  # 연결 끊김 등 기타 예외 발생 시 반복 종료
                 break
 
-    def _handle_gui_request(self, conn, request):  # GUI가 보낸 요청(JSON 포맷)을 받아 처리하는 함수
+    def _handle_gui_request(self, conn, request):  # gui가 보낸 요청(JSON 포맷)을 받아 처리하는 함수
         req_type = request.get("type")  # 요청 타입을 확인해 어떤 명령인지 분기하기 위한 키 추출
         payload = request.get("payload")  # 요청과 함께 딸려온 실제 데이터 (명령의 상세 내용)
         response_bytes = None  # GUI에게 다시 돌려보낼 응답 메시지 변수 초기화
