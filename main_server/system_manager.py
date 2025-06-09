@@ -8,35 +8,37 @@ from shared.protocols import parse_message, create_response
 
 class SystemManager:
     def __init__(self, host='0.0.0.0', port=9999):
-        # 통신 소켓 설정
+        # GUI용 서버 소켓 설정
         self.gui_server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.gui_server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.gui_server_socket.bind((host, port))
         
-        self.robot_command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # 로봇용 서버 소켓 설정
+        self.robot_command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # 로봇 제어기, GUI 연결 정보
         self.robot_command_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.robot_command_socket.bind((host, 9996))
+        self.robot_command_socket.bind((host, 9996)) # 로봇 클라이언트는 포트 번호 9996을 사용할 것
         
         # 클라이언트 및 상태 관리
-        # robot_connection 대신 robot_commander를 사용합니다.
-        self.robot_commander, self.gui_connections = None, {}
-        self.lock = threading.Lock()
+        self.robot_commander, self.gui_connections = None, {}  # 아직 아무런 연결도 안 된 초기 상태
+        self.lock = threading.Lock() # 스레드들이 동시에 하나의 데이터에 접근하지 않게 막기 위한 안전장치
         self.aruco_detection_enabled = False # ArUco 마커 인식 활성화 플래그
 
-        # 핵심 로직 모듈 초기화
+        # DB 관리 모듈 초기화
         db_config = {"host": "34.47.96.177", "user": "root", "password": "qwer1234!@#$", "database": "neighbot_db"}
         self.db_manager = DBManager(db_config)
         
-        self.video_frame_queue = queue.Queue(maxsize=30)
+        # 프레임 처리용 큐 및 이미지 처리기 초기화
+        self.video_frame_queue = queue.Queue(maxsize=30) # 최대 30장까지만 프레임 큐에 쌓이도록 설정
         self.image_manager = ImageManager(frame_queue=self.video_frame_queue)
         
+        # ArUco 마커 인식기 초기화
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.aruco_params = cv2.aruco.DetectorParameters()
         self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
 
         print("[서버] System Manager 초기화 완료.")
 
-    def start(self):
+    def start(self): # 이미지 매니저 및 여러 스레드 시작 (얘는 system_launcher.py 에 의해 실행됨!)
         self.image_manager.start()
         threading.Thread(target=self._accept_gui_connections, daemon=True).start()
         threading.Thread(target=self._accept_robot_connection, daemon=True).start()
@@ -44,7 +46,7 @@ class SystemManager:
         print("[서버] 모든 서비스 시작됨. GUI와 로봇의 연결을 기다립니다...")
         while True: time.sleep(10)
 
-    def _accept_gui_connections(self):
+    def _accept_gui_connections(self): # GUI 클라이언트 연결 수락
         self.gui_server_socket.listen()
         while True:
             conn, addr = self.gui_server_socket.accept()
