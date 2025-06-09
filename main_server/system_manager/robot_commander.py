@@ -2,7 +2,7 @@ import socket
 
 def send_commands():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(("192.168.219.106", 8282))  # 서버 연결 유지
+    sock.connect(("127.0.0.1", 8282))  # 서버 연결 유지
 
     try:
         while True:
