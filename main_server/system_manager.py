@@ -1,3 +1,14 @@
+# =====================================================================================
+# FILE: main_server/system_manager.py
+#
+# PURPOSE:
+#   - 메인 서버 애플리케이션의 전체 동작을 총괄하는 컨트롤 타워(Control Tower) 역할.
+#   - ImageManager, EventAnalyzer, DataMerger 등 시스템의 핵심 컴포넌트들을 생성.
+#   - 컴포넌트 간 데이터 통신을 위한 공유 큐(Queue)를 생성하고 연결해주는 '배선' 작업을 수행.
+#   - 모든 컴포넌트 스레드의 생명주기(시작, 종료)를 관리.
+#   - 서버 프로그램을 실행하는 메인 진입점(Entry Point)으로 기능함.
+# =====================================================================================
+
 # -------------------------------------------------------------------------------------
 # [섹션 1] 모듈 임포트
 # -------------------------------------------------------------------------------------
@@ -25,6 +36,7 @@ AI_SERVER_PORT = 9002 # AI 서버가 수신 대기하는 포트
 ANALYSIS_RECV_PORT = 9003
 
 # Merger가 최종 결과를 전송할 GUI의 주소
+GUI_HOST = "127.0.0.1"
 GUI_PORT = 9004 # GUI가 수신 대기하는 포트
 
 # -------------------------------------------------------------------------------------
@@ -51,7 +63,7 @@ class SystemManager:
         
         self.merger = DataMerger(image_queue = self.image_for_merger_queue,
                              event_queue = self.event_result_queue,
-                             gui_port = GUI_PORT)
+                             gui_addr = (GUI_HOST, GUI_PORT))
         
         # 생성된 스레드들을 리스트로 관리
         self.threads = [self.image_manager, self.event_analyzer, self.merger]
