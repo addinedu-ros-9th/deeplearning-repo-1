@@ -6,8 +6,14 @@ import time
 from queue import Queue
 from yolo_detector import YOLODetector
 
-class DetectorManager:
-    def __init__(self, sender_host='127.0.0.1', sender_tcp_port=9102, udp_port=9200):
+
+HOST_IP = "127.0.0.1"
+UDP_PORT = 9002 # AI 서버가 수신 대기하는 포트
+TCP_PORT = 9003 # Main 서버에 송신하는 포트
+
+
+class DetectionManager:
+    def __init__(self, sender_host=HOST_IP, sender_tcp_port=TCP_PORT, udp_port=UDP_PORT):
         self.sender_host = sender_host
         self.sender_tcp_port = sender_tcp_port
         self.udp_port = udp_port
@@ -85,13 +91,15 @@ class DetectorManager:
         threading.Thread(target=self.udp_listener, daemon=True).start()
         threading.Thread(target=self.tcp_sender_thread, daemon=True).start()
 
-        print("[DetectorManager] 실행 중... Ctrl+C로 종료")
+        print("[DetectionManager] 실행 중... Ctrl+C로 종료")
         threading.Event().wait()
 
+
 if __name__ == "__main__":
-    manager = DetectorManager(
-        sender_host='127.0.0.1',
-        sender_tcp_port=9102,
-        udp_port=9200
+    manager = DetectionManager(
+        sender_host=HOST_IP,
+        sender_tcp_port=TCP_PORT,
+        udp_port=UDP_PORT
     )
     manager.start()
+
