@@ -18,6 +18,8 @@ import queue
 from .image_manager import ImageManager
 from .event_analyzer import EventAnalyzer
 from .data_merger import DataMerger
+from .db_manager import DBManager
+
 
 # -------------------------------------------------------------------------------------
 # [섹션 2] 전역 설정 (네트워크 주소 및 포트)
@@ -39,6 +41,10 @@ ANALYSIS_RECV_PORT = 9003
 GUI_HOST = "127.0.0.1"
 GUI_PORT = 9004 # GUI가 수신 대기하는 포트
 
+# DB Manager를 위한 네트워크 설정
+DB_MANAGER_HOST = '0.0.0.0' # 모든 IP에서 접속 허용
+DB_MANAGER_PORT = 9005      
+
 # -------------------------------------------------------------------------------------
 # [섹션 3] SystemManager 클래스 정의
 # -------------------------------------------------------------------------------------
@@ -47,49 +53,49 @@ class SystemManager:
     데이터 흐름을 제어하기 위해 각 컴포넌트를 생성하고 연결하는 메인 클래스.
     """
     def __init__(self):
+
+        DB_CONFIG = {
+            'user': 'root', # 실제 DB 사용자 이름으로 변경
+            'password': 'qwer1234!@#$',  # 실제 DB 비밀번호으로 변경
+            'host': '34.47.96.177',  # 실제 DB 호스트 주소로 변경
+            'database': 'neighbot_db', # 실제 DB 이름으로 변경
+            'raise_on_warnings': True
+        }
+
+
         # 데이터 공유 큐 생성
         # ImageManager가 원본 이미지를 Merger로 보내기 위한 큐
         self.image_for_merger_queue = queue.Queue()
         # EventAnalyzer가 분석 결과를 Merger로 보내기 위한 큐
         self.event_result_queue = queue.Queue()
-
-        # 컴포넌트 인스턴스 생성 및 연결
-        self.image_manager = ImageManager(listen_port = IMAGE_RECV_PORT,
+        
+        # --- 컴포넌트 관리 ---
+        self.components = [
+            ImageManager(listen_port = IMAGE_RECV_PORT,
                                           ai_server_addr = (AI_SERVER_HOST, AI_SERVER_PORT),
-                                          output_queue = self.image_for_merger_queue)
-        
-        self.event_analyzer = EventAnalyzer(listen_port = ANALYSIS_RECV_PORT,
-                                              output_queue = self.event_result_queue)
-        
-        self.merger = DataMerger(image_queue = self.image_for_merger_queue,
+                                          output_queue = self.image_for_merger_queue),
+            EventAnalyzer(listen_port = ANALYSIS_RECV_PORT,
+                                              output_queue = self.event_result_queue),
+            DataMerger(image_queue = self.image_for_merger_queue,
                              event_queue = self.event_result_queue,
-                             gui_addr = (GUI_HOST, GUI_PORT))
-        
-        # 생성된 스레드들을 리스트로 관리
-        self.threads = [self.image_manager, self.event_analyzer, self.merger]
+                             gui_addr = (GUI_HOST, GUI_PORT)),
+            DBManager(DB_MANAGER_HOST, DB_MANAGER_PORT, DB_CONFIG)
+        ]
+        print("[System Manager] 모든 컴포넌트 초기화 완료")        
         
     def start(self):
-        '''
-        start all component thread. 
-        '''
         print("SystemManager: Starting all component threads...")
-        for thread in self.threads:
-            thread.start()
+        for component in self.components:
+            component.start()
         print("SystemManager: All component threads started.")
+        # 모든 스레드가 데몬 스레드가 아니므로, 메인 스레드가 종료되지 않도록 유지
+        for component in self.components:
+            component.join()
 
     def stop(self):
-        """
-        모든 컴포넌트 스레드를 중지.
-        (이 부분은 각 컴포넌트에 stop 메서드가 구현되어 있다고 가정.)
-        """
         print("SystemManager: Stopping all component threads...")
-        for thread in self.threads:
-            if hasattr(thread, 'stop') and callable(getattr(thread, 'stop')):
-                thread.stop() # 각 스레드의 stop 메서드 호출
-        
-        # 스레드가 완전히 종료될 때까지 기다릴 수 있습니다 (선택 사항).
-        for thread in self.threads:
-            thread.join() 
+        for component in self.components:
+            component.stop()
         print("SystemManager: All component threads stopped.")
 
 # -------------------------------------------------------------------------------------
