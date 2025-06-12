@@ -36,7 +36,7 @@ class DetectionManager:
                         response = self.send_queue.get()  # 큐에서 꺼냄
                         data = json.dumps(response).encode()
                         length_prefix = struct.pack("!I", len(data))
-                        sock.sendall(length_prefix + data)
+                        sock.sendall(length_prefix + data + b'\n')
 
                         print(f"[TCP 전송] 데이터 길이={[len(data)]}, frame_id={response['frame_id']}, 객체={len(response['detections'])}건", flush=True)
 
