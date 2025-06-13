@@ -57,7 +57,7 @@ class EventAnalyzer(threading.Thread):
         
         # 유의미한 이벤트가 하나라도 탐지되었을 경우에만 큐에 추가
         if is_event_detected:
-            print(f"[{self.name}] frame_id={data['frame_id']} 이벤트 탐지. Merger로 전송합니다.")
+            print(f"[➡️ 큐 입력] 4b. EventAnalyzer -> DataMerger: frame_id={data['frame_id']} 이벤트 데이터 큐에 추가")
             self.output_queue.put(data)
         else:
             # 유의미한 이벤트가 없으면 아무 작업도 하지 않음
@@ -86,6 +86,7 @@ class EventAnalyzer(threading.Thread):
                     body_data += packet
                 
                 request = json.loads(body_data.decode('utf-8'))
+                print(f"[✅ 수신] 3. AI_Server -> EventAnalyzer: frame_id {request.get('frame_id')} 분석 결과 수신")
                 
                 # 3. 수신된 데이터 분석 및 큐에 추가
                 self._analyze_and_queue(request)

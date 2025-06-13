@@ -89,7 +89,7 @@ class DataMerger(threading.Thread):
         while self.running:
             try:
                 frame_id, image_binary = self.image_queue.get(timeout=1)
-
+                print(f"[⬅️ 큐 출력] 4a. DataMerger: Image 큐에서 frame_id {frame_id} 수신")
                 # [수정된 핵심 로직]
                 # 1. '스트리밍'을 위해 이미지를 즉시 GUI로 전송합니다.
                 #    탐지 결과가 없는 기본 상태의 패킷을 만듭니다.
@@ -120,6 +120,7 @@ class DataMerger(threading.Thread):
         while self.running:
             try:
                 event_data = self.event_queue.get(timeout=1)
+                print(f"[⬅️ 큐 출력] 4b. DataMerger: Event 큐에서 frame_id {event_data['frame_id']} 수신")
                 frame_id = event_data['frame_id']
 
                 with self.lock:
@@ -166,7 +167,7 @@ class DataMerger(threading.Thread):
                 json_bytes = json.dumps(event_data).encode('utf-8')
                 len_prefix = struct.pack('!I', len(json_bytes))
                 final_packet = len_prefix + json_bytes + image_binary
-                
+                print(f"[✈️ 전달] 5. DataMerger -> GUI: frame_id {event_data['frame_id']} (status: {status}) 데이터 전송")
                 sock.sendall(final_packet)
         
         except ConnectionRefusedError:

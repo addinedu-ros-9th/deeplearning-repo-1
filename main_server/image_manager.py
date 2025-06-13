@@ -55,12 +55,13 @@ class ImageManager(threading.Thread):
                 # =================== [ 디버깅 PRINT 추가 ] ===================
                 header = data.split(b'|')[0]
                 json_data = json.loads(header)
-                print(f"[✅ 수신] 1. Robot -> ImageManager: frame_id {json_data.get('frame_id')} 수신 완료 (from {addr})")
+                print(f"[✅ 수신] 1. Robot -> ImageManager: frame_id {json_data.get('frame_id')} 수신 완료 (from {robot_addr})")
                 # ==========================================================
 
 
                 # [임무 1] AI 서버로 데이터 즉시 전달 (Pass-through)
                 self.sock.sendto(data, self.ai_server_addr)
+                print(f"[✈️ 전달] 2. ImageManager -> AI_Server: frame_id {json_data.get('frame_id')} 전달")
                 
                 # [임무 2] Merger를 위해 데이터 분리 및 큐에 저장.
                 # 인터페이스 명세에 따라, b'|' 구분자를 기준으로 JSON과 이미지 데이터 분리.
@@ -69,10 +70,11 @@ class ImageManager(threading.Thread):
                 # json 부분을 파싱하여 'frame_id' 획득
                 meta_data = json.loads(json_part.decode('utf-8'))
                 frame_id = meta_data.get('frame_id')
-
+                print(f"[➡️ 큐 입력] 4a. ImageManager -> DataMerger: frame_id {frame_id} 이미지 데이터 큐에 추가")
                 # Merger가 사용할 수 있도록 (frame_id, 이미지 바이너리) 형태의 튜플로 묶음.
                 # 공유 큐(self.output_queue)에 넣음
                 self.output_queue.put((frame_id, image_part))
+                
 
             except socket.error as e:
                 # self.sock.close()에 의해 정상적으로 발생하는 소켓 에러는 무시
