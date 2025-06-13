@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 # 수신 측(같은 네트워크 상) 와이파이 IP
 SERVER_IP = '192.168.0.3'     # ← 수신기 와이파이 IP로 교체
-SERVER_PORT = 5005
+SERVER_PORT = 9001
 
 # UDP 소켓 생성
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
