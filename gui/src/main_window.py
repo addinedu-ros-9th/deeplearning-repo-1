@@ -14,7 +14,7 @@ DEBUG = True
 # 서버 연결 설정
 # SERVER_IP = "192.168.0.23" # data_merger 서버 IP
 SERVER_IP = "127.0.0.1"      # local host
-SERVER_PORT = 9999           # data_merger 서버 포트
+SERVER_PORT = 9004           # data_merger 서버 포트
 
 class DataMergerReceiverThread(QThread):
     # 디버그 태그 정의
