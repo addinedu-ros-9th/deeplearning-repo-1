@@ -5,7 +5,7 @@ import numpy as np
 from ultralytics import YOLO
 
 class YOLODetector:
-    def __init__(self, model_path='yolov8n-seg.pt'):
+    def __init__(self, model_path='best_gun_knife.pt'):
         self.model = YOLO(model_path)
         print("[YOLODetector] 모델 로드 완료")
 

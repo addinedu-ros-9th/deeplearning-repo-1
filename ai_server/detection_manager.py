@@ -5,6 +5,8 @@ import struct
 import time
 from queue import Queue
 from yolo_detector import YOLODetector
+import numpy as np
+import cv2
 
 
 HOST_IP = "127.0.0.1"
@@ -67,6 +69,7 @@ class DetectionManager:
                 jpeg_bytes = data[json_end + 1:-1]
 
                 header = json.loads(json_part.decode())
+                print(f"[UDP] 수신 json: {header} ")
                 frame_id = header.get("frame_id")
                 timestamp = header.get("timestamp")
                 print(f"[UDP] JSON 부분 길이: {json_end} / JPEG 길이: {len(jpeg_bytes)}", flush=True)
@@ -75,6 +78,14 @@ class DetectionManager:
                     print(f"[UDP] 중복 frame_id={frame_id} → 생략")
                     continue
                 last_frame_id = frame_id
+
+                # JPEG 디코딩 (추가 코드)
+                nparr = np.frombuffer(jpeg_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                # 시각화 (추가 코드)
+                cv2.imshow("UDP Frame", frame)
+                cv2.waitKey(1)
 
                 # 예측 수행
                 response = self.detector.predict_raw(frame_id, timestamp, jpeg_bytes)
