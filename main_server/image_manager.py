@@ -52,6 +52,13 @@ class ImageManager(threading.Thread):
                 # 로봇으로 부터 UDP 데이터 수신 대기
                 data, robot_addr = self.sock.recvfrom(self.BUFFER_SIZE)
 
+                # =================== [ 디버깅 PRINT 추가 ] ===================
+                header = data.split(b'|')[0]
+                json_data = json.loads(header)
+                print(f"[✅ 수신] 1. Robot -> ImageManager: frame_id {json_data.get('frame_id')} 수신 완료 (from {addr})")
+                # ==========================================================
+
+
                 # [임무 1] AI 서버로 데이터 즉시 전달 (Pass-through)
                 self.sock.sendto(data, self.ai_server_addr)
                 
