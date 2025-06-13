@@ -57,7 +57,7 @@ class EventAnalyzer(threading.Thread):
         
         # 유의미한 이벤트가 하나라도 탐지되었을 경우에만 큐에 추가
         if is_event_detected:
-            print(f"[➡️ 큐 입력] 4b. EventAnalyzer -> DataMerger: frame_id={data['frame_id']} 이벤트 데이터 큐에 추가")
+            print(f"[➡️ 큐 입력] 4b. EventAnalyzer -> DataMerger: frame_id={data.get('frame_id')}, timestamp {data.get('timestamp')} 이벤트 데이터 추가")
             self.output_queue.put(data)
         else:
             # 유의미한 이벤트가 없으면 아무 작업도 하지 않음
@@ -85,10 +85,20 @@ class EventAnalyzer(threading.Thread):
                         raise ConnectionError("수신 중 연결이 끊어졌습니다.")
                     body_data += packet
                 
-                request = json.loads(body_data.decode('utf-8'))
-                print(f"[✅ 수신] 3. AI_Server -> EventAnalyzer: frame_id {request.get('frame_id')} 분석 결과 수신")
+                # ========================= ✨ 수정된 부분 ✨ =========================
+                # 3. Interface Specification.md (Index 5)에 명시된 후행 개행 문자(b'\n')를 읽어서 소비합니다.
+                #    이것을 하지 않으면 다음 메시지를 읽을 때 이 개행 문자가 읽혀 오류가 발생합니다.
+                trailing_newline = conn.recv(1) 
+                # ===================================================================
                 
-                # 3. 수신된 데이터 분석 및 큐에 추가
+                # 4. 수신된 데이터 분석 및 큐에 추가
+                request = json.loads(body_data.decode('utf-8'))
+                # 수신 로그의 사이즈 계산을 정확하게 하기 위해 +1 (개행문자)
+                total_size = len(len_prefix) + len(body_data) + len(trailing_newline)
+                print(f"[✅ 수신] 3. AI_Server -> EventAnalyzer: frame_id {request.get('frame_id')}, timestamp {request.get('timestamp')}, size {total_size} bytes, detections: {request.get('detections')}")
+
+                
+                # 5. 수신된 데이터 분석 및 큐에 추가
                 self._analyze_and_queue(request)
 
         except ConnectionResetError:

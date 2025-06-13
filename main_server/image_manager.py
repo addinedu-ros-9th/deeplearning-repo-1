@@ -52,29 +52,24 @@ class ImageManager(threading.Thread):
                 # 로봇으로 부터 UDP 데이터 수신 대기
                 data, robot_addr = self.sock.recvfrom(self.BUFFER_SIZE)
 
-                # =================== [ 디버깅 PRINT 추가 ] ===================
-                header = data.split(b'|')[0]
-                json_data = json.loads(header)
-                print(f"[✅ 수신] 1. Robot -> ImageManager: frame_id {json_data.get('frame_id')} 수신 완료 (from {robot_addr})")
-                # ==========================================================
-
-
-                # [임무 1] AI 서버로 데이터 즉시 전달 (Pass-through)
-                self.sock.sendto(data, self.ai_server_addr)
-                print(f"[✈️ 전달] 2. ImageManager -> AI_Server: frame_id {json_data.get('frame_id')} 전달")
-                
-                # [임무 2] Merger를 위해 데이터 분리 및 큐에 저장.
-                # 인터페이스 명세에 따라, b'|' 구분자를 기준으로 JSON과 이미지 데이터 분리.
+                # 1. 데이터를 먼저 분리하고 JSON을 한 번만 파싱합니다.
                 json_part, image_part = data.split(b'|', 1)
-
-                # json 부분을 파싱하여 'frame_id' 획득
                 meta_data = json.loads(json_part.decode('utf-8'))
                 frame_id = meta_data.get('frame_id')
-                print(f"[➡️ 큐 입력] 4a. ImageManager -> DataMerger: frame_id {frame_id} 이미지 데이터 큐에 추가")
-                # Merger가 사용할 수 있도록 (frame_id, 이미지 바이너리) 형태의 튜플로 묶음.
-                # 공유 큐(self.output_queue)에 넣음
-                self.output_queue.put((frame_id, image_part))
+
+                # 2. 파싱된 'meta_data' 변수를 사용하여 모든 작업을 처리합니다.
+                print(f"[✅ 수신] 1. Robot -> ImageManager: frame_id {meta_data.get('frame_id')}, timestamp {meta_data.get('timestamp')}, size {len(data)} bytes (from {robot_addr})")
+
+                # [임무 1] AI 서버로 데이터 즉시 전달
+                print(f"[✈️ 전달] 2. ImageManager -> AI_Server: frame_id {meta_data.get('frame_id')}, timestamp {meta_data.get('timestamp')}, size {len(data)} bytes")
+                self.sock.sendto(data, self.ai_server_addr)
                 
+                # [임무 2] Merger를 위해 큐에 데이터 저장
+                print(f"[➡️ 큐 입력] 4a. ImageManager -> DataMerger: frame_id {meta_data.get('frame_id')}, timestamp {meta_data.get('timestamp')}, image_size {len(image_part)} bytes")
+                # 'meta_data'에서 timestamp도 가져옵니다.
+                timestamp = meta_data.get('timestamp')
+                # 큐에 frame_id, image_binary, timestamp 세 가지를 모두 넣어줍니다.
+                self.output_queue.put((frame_id, image_part, timestamp))
 
             except socket.error as e:
                 # self.sock.close()에 의해 정상적으로 발생하는 소켓 에러는 무시
