@@ -1,4 +1,4 @@
-# main_server/db_manager.py
+# main_server/db_manager.py (수정된 최종 버전)
 
 import socket
 import threading
@@ -24,27 +24,32 @@ class DBManager(threading.Thread):
         """데이터베이스 커넥션을 생성합니다."""
         return mysql.connector.connect(**self.db_config)
 
-    def verify_user(self, user_id: str, password: str) -> (bool, str):
+    def verify_user(self, user_id_from_gui: str, password: str) -> (bool, str):
         """
         사용자 ID와 비밀번호를 검증합니다.
-        Interface Specification(Index 2)에 따라 성공 시 (True, 사용자 이름),
-        실패 시 (False, None)을 반환합니다.
+        성공 시 (True, 사용자 이름), 실패 시 (False, None)을 반환합니다.
         """
         conn = None
         try:
             conn = self._get_connection()
-            # 로그인 성공 시 사용자 이름을 가져오기 위해 쿼리 수정
-            query = "SELECT password, user_name FROM users WHERE id = %s"
+            
+            # [수정된 핵심]
+            # 1. 실제 DB 컬럼명인 `user_name`으로 WHERE 절을 수정합니다.
+            # 2. 로그인 성공 시 반환할 이름은 `name` 컬럼에서 가져옵니다.
+            query = "SELECT password, name FROM users WHERE user_name = %s"
+            
             cursor = conn.cursor()
-            cursor.execute(query, (user_id,))
+            # 쿼리에 GUI로부터 받은 로그인 ID(user_id_from_gui)를 사용
+            cursor.execute(query, (user_id_from_gui,))
             result = cursor.fetchone()
             
+            # result[0]은 password, result[1]은 name
             if result and result[0] == password:
-                user_name = result[1]
-                print(f"[DB] '{user_id}' ({user_name}) 인증 성공")
-                return True, user_name
+                user_full_name = result[1] # '이승훈'과 같은 실명을 가져옴
+                print(f"[DB] '{user_id_from_gui}' ({user_full_name}) 인증 성공")
+                return True, user_full_name
             
-            print(f"[DB] '{user_id}' 인증 실패: ID 또는 비밀번호 불일치")
+            print(f"[DB] '{user_id_from_gui}' 인증 실패: ID 또는 비밀번호 불일치")
             return False, None
         except mysql.connector.Error as err:
             print(f"[DB 오류] {err}")
@@ -58,38 +63,33 @@ class DBManager(threading.Thread):
         print(f"[DB Manager] GUI 클라이언트 연결됨: {addr}")
         try:
             while self.running:
-                # 1. 길이 수신 (4바이트)
                 len_bytes = conn.recv(4)
                 if not len_bytes:
                     break
                 
                 msg_len = struct.unpack('>I', len_bytes)[0]
-                
-                # 2. 실제 JSON 데이터 수신
                 data_bytes = conn.recv(msg_len)
                 request_data = json.loads(data_bytes.decode('utf-8'))
                 
                 print(f"[DB Manager] GUI로부터 수신: {request_data}")
 
-                # 3. 로그인 요청 처리 (Interface Specification Index 1)
                 user_id = request_data.get('user_id')
                 password = request_data.get('password')
 
                 is_success, user_name = self.verify_user(user_id, password)
 
-                # 4. 응답 데이터 생성 (Interface Specification Index 2)
                 response = {
-                    "user_name": user_name,
+                    "user_name": user_name, # 인터페이스 명세서에 따라 사용자 이름을 담아줌
                     "result": "succeed" if is_success else "fail"
                 }
                 
-                # 5. GUI에 응답 전송
                 response_bytes = json.dumps(response).encode('utf-8')
                 response_len = struct.pack('>I', len(response_bytes))
                 conn.sendall(response_len + response_bytes)
 
-        except ConnectionResetError:
-            print(f"[DB Manager] GUI 클라이언트 연결이 초기화되었습니다: {addr}")
+        except (ConnectionResetError, struct.error):
+            # 클라이언트가 연결을 끊었을 때 발생하는 정상적인 오류일 수 있음
+            pass
         except Exception as e:
             print(f"[DB Manager] 클라이언트 처리 중 오류 발생: {e}")
         finally:
@@ -97,7 +97,6 @@ class DBManager(threading.Thread):
             conn.close()
 
     def run(self):
-        """TCP 서버를 시작하고 GUI 클라이언트의 연결을 수락합니다."""
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
@@ -114,9 +113,7 @@ class DBManager(threading.Thread):
             self.server_socket.close()
 
     def stop(self):
-        """서버 실행을 중지합니다."""
         self.running = False
         if self.server_socket:
-            # accept() 대기 상태를 강제로 해제하기 위해 소켓을 닫습니다.
             self.server_socket.close()
         print("[DB Manager] 종료 신호 수신. 서버를 중지합니다.")

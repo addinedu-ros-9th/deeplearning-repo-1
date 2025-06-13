@@ -12,7 +12,7 @@ DEBUG = True
 # 서버 연결 설정
 # SERVER_IP = "192.168.0.23" # addinedu wifi ip address
 SERVER_IP = "127.0.0.1"    # local host
-SERVER_PORT = 9004
+SERVER_PORT = 9005
 
 class LoginWindow(QMainWindow):
     # 디버그 태그 정의
