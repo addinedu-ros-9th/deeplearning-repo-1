@@ -9,7 +9,6 @@ ILLEGAL_WARNING    = b'\x05'  # 위법 경고 (흡연 등)
 DANGER_WARNING     = b'\x06'  # 위험 경고 (칼, 총 등)
 EMERGENCY_WARNING  = b'\x07'  # 응급 경고 (쓰러짐 등)
 CASE_CLOSED        = b'\x08'  # 사건 종료
-
 MOVE_TO_A          = b'\x09'  # A 지역 이동
 MOVE_TO_B          = b'\x0A'  # B 지역 이동
 RETURN_TO_BASE     = b'\x0B'  # BASE 지역 복귀
