@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Detection Result",
+  "type": "object",
+  "properties": {
+    "frame_id": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "해당 감지 결과의 프레임 번호"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "감지된 시간 (ISO 8601 형식)"
+    },
+    "detections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "감지된 객체의 라벨"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "신뢰도 (0~1)"
+          },
+          "box": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "[x1, y1, x2, y2] 좌표"
+          }
+        },
+        "required": ["label", "confidence", "box"],
+        "additionalProperties": false
+      },
+      "description": "감지된 객체 목록"
+    }
+  },
+  "required": ["frame_id", "timestamp", "detections"],
+  "additionalProperties": false
+}
