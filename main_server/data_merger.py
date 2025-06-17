@@ -31,6 +31,8 @@ import json
 import struct
 import time
 from datetime import datetime, timedelta
+import cv2
+import numpy as np
 
 # -------------------------------------------------------------------------------------
 # [섹션 2] DataMerger 클래스 정의
@@ -145,14 +147,52 @@ class DataMerger(threading.Thread):
         while self.running:
             try:
                 event_data, image_binary = self.gui_send_queue.get(timeout=1)
+
+                # ========================= ✨ 이미지 처리 시작 ✨ =========================
+                # 1. 바이너리 데이터를 OpenCV 이미지(Numpy 배열)로 디코딩
+                nparr = np.frombuffer(image_binary, np.uint8)
+                img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                # 2. 로봇 상태 텍스트 그리기 (이전 요청)
+                status_text = f"Robot Status: {event_data.get('robot_status', 'unknown')}"
+                cv2.putText(img_np, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+                # 3. 탐지된 객체 바운딩 박스 그리기 (이번 요청)
+                # event_data의 'detections' 리스트를 순회하며 각 객체 정보를 가져옵니다.
+                for det in event_data.get("detections", []):
+                    # 인터페이스 명세서(detection_result)에 따르면 키는 'box' 입니다.
+                    # 만약 AI 서버에서 'bbox'로 보낸다면 det.get("bbox")로 수정해야 합니다.
+                    box = det.get("box")
+                    if not box or len(box) != 4:
+                        continue # box 정보가 없거나 형식이 맞지 않으면 건너뜁니다.
+                        
+                    x1, y1, x2, y2 = map(int, box) # 좌표는 정수여야 합니다.
+                    label = det.get("label", "unknown")
+                    
+                    # 녹색 사각형으로 바운딩 박스를 그립니다.
+                    cv2.rectangle(img_np, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    
+                    # 바운딩 박스 위에 라벨 텍스트를 추가합니다.
+                    cv2.putText(img_np, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+
+                # 4. 텍스트와 사각형이 추가된 이미지를 다시 JPEG 바이너리로 인코딩
+                success, modified_image_binary = cv2.imencode('.jpg', img_np)
+                if not success:
+                    # 인코딩 실패 시 원본 이미지 사용
+                    modified_image_binary = image_binary
+                else:
+                    modified_image_binary = modified_image_binary.tobytes()
+                # ========================= ✨ 이미지 처리 끝 ✨ =========================
+
+                # 최종 데이터 패킷 생성 및 전송
                 json_part = json.dumps(event_data).encode('utf-8')
-                data_to_send = json_part + b'|' + image_binary
+                data_to_send = json_part + b'|' + modified_image_binary # 수정된 이미지 사용
                 header = struct.pack('>I', len(data_to_send))
                 
                 state_in_packet = event_data.get('robot_status', 'N/A')
                 frame_id_in_packet = event_data.get('frame_id')
                 packet_size = len(header) + len(data_to_send)
-                print(f"[✈️ TCP 전송] 7. DataMerger -> GUI : Final packet for frame_id {frame_id_in_packet} (state: {state_in_packet}), size: {packet_size}")
+                print(f"[✈️ GUI 전송] 7. DataMerger -> GUI : frame_id {frame_id_in_packet} (state: {state_in_packet}), size: {packet_size} with drawings")
                 
                 if self.gui_client_socket:
                     self.gui_client_socket.sendall(header + data_to_send)
