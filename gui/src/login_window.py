@@ -26,6 +26,10 @@ class LoginWindow(QMainWindow):
         super().__init__()
         if DEBUG:
             print(f"{self.DEBUG_TAG['INIT']} LoginWindow 초기화")
+        
+        self.sock = None  # 소켓 객체 저장
+        self.setup_connection()  # 서버 연결 설정
+        
         # 로그인 UI 파일 로드
         loadUi('./gui/ui/login.ui', self)
         # 로그인 버튼 클릭 또는 Enter 키 입력시 handle_login 호출
@@ -33,8 +37,32 @@ class LoginWindow(QMainWindow):
         self.input_id.returnPressed.connect(self.handle_login)
         self.input_pw.returnPressed.connect(self.handle_login)
 
+    def setup_connection(self):
+        """서버 연결 설정"""
+        try:
+            if DEBUG:
+                print(f"{self.DEBUG_TAG['CONN']} 서버 연결 시도: {SERVER_IP}:{SERVER_PORT}")
+            
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.connect((SERVER_IP, SERVER_PORT))
+            
+            if DEBUG:
+                print(f"{self.DEBUG_TAG['CONN']} 서버 연결 성공")
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"{self.DEBUG_TAG['ERR']} 서버 연결 실패: {e}")
+            QMessageBox.critical(self, "연결 오류", "서버 연결에 실패했습니다.\n다시 시도해주세요.")
+            self.sock = None
 
     def handle_login(self):
+        """로그인 처리"""
+        # 소켓이 없거나 끊어진 경우 재연결 시도
+        if not self.sock:
+            self.setup_connection()
+            if not self.sock:
+                return
+
         # 입력값 추출
         user_id = self.input_id.text()
         password = self.input_pw.text()
@@ -45,40 +73,45 @@ class LoginWindow(QMainWindow):
         }
 
         try:
+            # 로그인 요청 전송
+            body = json.dumps(message).encode('utf-8')
+            packet = len(body).to_bytes(4, 'big') + body + b'\n'
+            self.sock.sendall(packet)
             if DEBUG:
-                print(f"{self.DEBUG_TAG['CONN']} 서버 연결 시도: {SERVER_IP}:{SERVER_PORT}")
+                print(f"{self.DEBUG_TAG['AUTH']} 인증 요청: {message}")
 
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.connect((SERVER_IP, SERVER_PORT))
+            # 응답 수신
+            response = self.sock.recv(4096)
+            if DEBUG:
+                print(f"{self.DEBUG_TAG['AUTH']} 수신된 응답: {response}")
+
+            response_data = json.loads(response[4:].decode())
+            if DEBUG:
+                print(f"{self.DEBUG_TAG['AUTH']} 응답 파싱 결과: {response_data}")
+
+            if response_data.get("result") == "succeed":
                 if DEBUG:
-                    print(f"{self.DEBUG_TAG['CONN']} 서버 연결 성공")
-
-                body = json.dumps(message).encode('utf-8')
-                packet = len(body).to_bytes(4, 'big') + body + b'\n'
-                sock.sendall(packet)
+                    print(f"{self.DEBUG_TAG['AUTH']} 인증 성공")
+                self.main_window = MainWindow()
+                self.main_window.show()
+                self.close()
+            else:
                 if DEBUG:
-                    print(f"{self.DEBUG_TAG['AUTH']} 인증 요청: {message}")
-
-                response = sock.recv(4096)
-                if DEBUG:
-                    print(f"{self.DEBUG_TAG['AUTH']} 수신된 응답: {response}")
-
-                response_data = json.loads(response[4:].decode())
-                if DEBUG:
-                    print(f"{self.DEBUG_TAG['AUTH']} 응답 파싱 결과: {response_data}")
-
-                if response_data.get("result") == "succeed":
-                    if DEBUG:
-                        print(f"{self.DEBUG_TAG['AUTH']} 인증 성공")
-                    self.main_window = MainWindow()
-                    self.main_window.show()
-                    self.close()
-                else:
-                    if DEBUG:
-                        print(f"{self.DEBUG_TAG['AUTH']} 인증 실패")
-                    QMessageBox.warning(self, "로그인 실패", "아이디 또는 비밀번호가 올바르지 않습니다.")
+                    print(f"{self.DEBUG_TAG['AUTH']} 인증 실패")
+                QMessageBox.warning(self, "로그인 실패", "아이디 또는 비밀번호가 올바르지 않습니다.")
 
         except Exception as e:
             if DEBUG:
                 print(f"{self.DEBUG_TAG['ERR']} 처리 실패: {e}")
-            QMessageBox.critical(self, "오류", f"서버 연결에 실패했습니다:\n{e}")
+            QMessageBox.critical(self, "오류", f"로그인 처리 중 오류가 발생했습니다:\n{e}")
+            # 소켓 재설정
+            self.sock = None
+
+    def closeEvent(self, event):
+        """윈도우 종료 시 소켓 정리"""
+        if self.sock:
+            try:
+                self.sock.close()
+            except:
+                pass
+        super().closeEvent(event)
