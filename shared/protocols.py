@@ -12,6 +12,8 @@ CASE_CLOSED        = b'\x08'  # 사건 종료
 MOVE_TO_A          = b'\x09'  # A 지역 이동
 MOVE_TO_B          = b'\x0A'  # B 지역 이동
 RETURN_TO_BASE     = b'\x0B'  # BASE 지역 복귀
+GET_LOGS           = b'\x0C'  # 로그 전체 데이터 조회
+START_STREAM       = b'\x0D'  # 영상 스트리밍 시작
 
 # ===== 문자열 명령어 → 바이트 코드 매핑 =====
 CMD_MAP = {
@@ -26,6 +28,8 @@ CMD_MAP = {
     "MOVE_TO_A":          MOVE_TO_A,
     "MOVE_TO_B":          MOVE_TO_B,
     "RETURN_TO_BASE":     RETURN_TO_BASE,
+    "GET_LOGS":           GET_LOGS,
+    "START_STREAM":       START_STREAM,
 }
 
 # ===== 바이트 코드 → 문자열 명령어 역매핑 =====
@@ -44,4 +48,6 @@ CMD_DESCRIPTION = {
     "MOVE_TO_A":          "로봇이 A 지역으로 이동",
     "MOVE_TO_B":          "로봇이 B 지역으로 이동",
     "RETURN_TO_BASE":     "로봇이 BASE 지역으로 이동",
+    "GET_LOGS":           "전체 로그 데이터를 요청",
+    "START_STREAM":       "로봇의 비디오 스트리밍을 시작"
 }
