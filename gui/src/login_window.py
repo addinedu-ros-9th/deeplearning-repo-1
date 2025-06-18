@@ -10,6 +10,7 @@ from gui.src.main_window import MainWindow
 DEBUG = True
 
 # 서버 연결 설정
+# SERVER_IP = "192.168.0.23" # addinedu wifi ip address
 SERVER_IP = "127.0.0.1"    # local host
 SERVER_PORT = 9005
 
@@ -28,11 +29,8 @@ class LoginWindow(QMainWindow):
             print(f"{self.DEBUG_TAG['INIT']} LoginWindow 초기화")
         # 로그인 UI 파일 로드
         loadUi('./gui/ui/login.ui', self)
-        # 로그인 버튼 클릭 또는 Enter 키 입력시 handle_login 호출
+        # 로그인 버튼 클릭 시 handle_login 호출
         self.btn_login.clicked.connect(self.handle_login)
-        self.input_id.returnPressed.connect(self.handle_login)
-        self.input_pw.returnPressed.connect(self.handle_login)
-
 
     def handle_login(self):
         # 입력값 추출
