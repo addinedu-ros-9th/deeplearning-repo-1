@@ -27,6 +27,10 @@ DEBUG_TAG = {
 # 서버 설정
 SERVER_IP = "127.0.0.1"  # localhost
 SERVER_PORT = 9004       # 메인 통신 포트
+ROBOT_COMMANDER_PORT = 9006  # 로봇 커맨더 포트
+
+# 지역 이동 명령 목록
+MOVEMENT_COMMANDS = [CMD_MAP['MOVE_TO_A'], CMD_MAP['MOVE_TO_B'], CMD_MAP['RETURN_TO_BASE']]
 
 class DataReceiverThread(QThread):
     """서버로부터 데이터를 수신하는 스레드"""
@@ -238,15 +242,29 @@ class MainWindow(QMainWindow):
                 print(f"  - 패킷: {packet!r}")
                 print(f"  - 바이트: {' '.join(hex(b)[2:] for b in packet)}")
 
-            # 소켓이 없으면 생성
-            if not hasattr(self, 'command_socket'):
+            # 지역 이동 명령인 경우 로봇 커맨더로 전송
+            if command in ["MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE"]:
+                if not hasattr(self, 'commander_socket'):
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['CONN']} 새 로봇 커맨더 소켓 생성")
+                    self.commander_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.commander_socket.connect((SERVER_IP, ROBOT_COMMANDER_PORT))
+                
+                # 로봇 커맨더로 전송
                 if DEBUG:
-                    print(f"{DEBUG_TAG['CONN']} 새 명령 소켓 생성")
-                self.command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.command_socket.connect((SERVER_IP, SERVER_PORT))
+                    print(f"{DEBUG_TAG['SEND']} 로봇 커맨더로 전송 (포트: {ROBOT_COMMANDER_PORT})")
+                self.commander_socket.sendall(packet)
+                
+            # 일반 명령은 기존 서버로 전송
+            else:
+                if not hasattr(self, 'command_socket'):
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['CONN']} 새 명령 소켓 생성")
+                    self.command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.command_socket.connect((SERVER_IP, SERVER_PORT))
 
-            # 명령 전송
-            self.command_socket.sendall(packet)
+                # 메인 서버로 전송
+                self.command_socket.sendall(packet)
 
             if DEBUG:
                 print(f"{DEBUG_TAG['SEND']} 명령 전송 완료")
@@ -257,7 +275,13 @@ class MainWindow(QMainWindow):
                 print(traceback.format_exc())
             
             # 소켓 재설정
-            if hasattr(self, 'command_socket'):
+            if command in ["MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE"] and hasattr(self, 'commander_socket'):
+                try:
+                    self.commander_socket.close()
+                except:
+                    pass
+                delattr(self, 'commander_socket')
+            elif hasattr(self, 'command_socket'):
                 try:
                     self.command_socket.close()
                 except:
@@ -324,4 +348,6 @@ class MainWindow(QMainWindow):
             self.receiver.wait()
         if hasattr(self, 'command_socket'):
             self.command_socket.close()
+        if hasattr(self, 'commander_socket'):
+            self.commander_socket.close()
         super().closeEvent(event)

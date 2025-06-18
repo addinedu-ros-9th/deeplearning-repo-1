@@ -258,28 +258,25 @@ class MonitoringTab(QWidget):
                 self.enable_movement_buttons()
 
     def send_move_to_a_command(self):
-        """A 지점으로 이동 명령을 전송"""
+        """A 지역으로 이동 명령을 전송"""
         if self.current_location != 'A' and not self.is_moving:
             self.robot_command.emit("MOVE_TO_A")
-            self.animate_robot_movement('A')
-            self.update_status("system", "A 지점으로 이동 중...")
-            self.update_robot_status("moving")
+            if DEBUG:
+                print(f"A 지역 이동 명령 전송")
 
     def send_move_to_b_command(self):
-        """B 지점으로 이동 명령을 전송"""
+        """B 지역으로 이동 명령을 전송"""
         if self.current_location != 'B' and not self.is_moving:
             self.robot_command.emit("MOVE_TO_B")
-            self.animate_robot_movement('B')
-            self.update_status("system", "B 지점으로 이동 중...")
-            self.update_robot_status("moving")
+            if DEBUG:
+                print(f"B 지역 이동 명령 전송")
 
     def send_return_to_base_command(self):
         """기지로 복귀 명령을 전송"""
         if self.current_location != 'BASE' and not self.is_moving:
             self.robot_command.emit("RETURN_TO_BASE")
-            self.animate_robot_movement('BASE')
-            self.update_status("system", "기지로 복귀 중...")
-            self.update_robot_status("moving")
+            if DEBUG:
+                print(f"기지 복귀 명령 전송")
 
     def start_stream(self):
         """영상 스트리밍을 시작합니다."""
