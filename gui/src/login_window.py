@@ -75,13 +75,13 @@ class LoginWindow(QMainWindow):
         try:
             # 로그인 요청 전송
             json_str = json.dumps(message)
-            body = json_str.encode('utf-8')
-            header = (len(json_str)).to_bytes(4, 'big')  # JSON 문자열 길이로 헤더 생성
-            packet = header + body + b'\n'
+            body = json_str.encode('utf-8') + b'\n'  # JSON + \n을 합쳐서 body 생성
+            header = len(body).to_bytes(4, 'big')    # body(JSON + \n) 길이로 헤더 생성
+            packet = header + body
             self.sock.sendall(packet)
             if DEBUG:
                 print(f"{self.DEBUG_TAG['AUTH']} 인증 요청:")
-                print(f"  - JSON 길이: {len(json_str)} bytes")
+                print(f"  - 전체 길이 (JSON + \\n): {len(body)} bytes")
                 print(f"  - 헤더: {header.hex()}")
                 print(f"  - 바디: {json_str}")
                 print(f"  - 전체 패킷: {packet!r}")
