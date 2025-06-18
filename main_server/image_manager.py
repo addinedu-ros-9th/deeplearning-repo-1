@@ -62,6 +62,7 @@ class ImageManager(threading.Thread):
         # ArUco 탐지를 위한 설정 초기화
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250) # 사용할 ArUco 딕셔너리
         self.aruco_params = cv2.aruco.DetectorParameters() # ArUco 탐지 파라미터
+        self.aruco_detector = cv2.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
 
         # --- 카메라 보정 데이터 로드 ---
         # .pkl 파일로부터 카메라 매트릭스와 왜곡 계수를 로드
@@ -164,22 +165,31 @@ class ImageManager(threading.Thread):
             frame = cv2.imdecode(image_np, cv2.IMREAD_COLOR)
 
             # 2. ArUco 마커 탐지
-            corners, ids, rejected = cv2.aruco.detectMarkers(frame, self.aruco_dict, parameters=self.aruco_params)
+            corners, ids, rejected = self.aruco_detector.detectMarkers(frame)
 
             if ids is not None: # 마커가 하나 이상 탐지된 경우
-                # 3. 마커 3D 위치 추정
+                # 3. 시각화를 위해 이미지에 마커 그리기
+                # 4. 마커 3D 위치 추정
+                cv2.aruco.drawDetectedMarkers(frame, corners, ids)
                 rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(corners, 0.05, self.camera_matrix, self.dist_coeffs)
 
                 for i, marker_id in enumerate(ids):
-                    # 4. [흐름 A] 제어용 데이터 전송
+                    # 5. [흐름 A] 제어용 데이터 전송
                     distance_z = tvecs[i][0][2]
                     aruco_result = {'id': int(marker_id[0]), 'distance': distance_z}
                     # 디버깅: RobotCommander로 ArUco 결과 전송 확인
                     print(f"[➡️ 큐 입력] 2. ImageManager -> RobotCommander : (moving) ArUco id={aruco_result['id']}, dist={aruco_result['distance']:.2f}")
                     self.aruco_result_queue.put(aruco_result)
                 
-                # 5. 시각화를 위해 이미지에 마커 그리기
-                cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+                    # ✨ [여기 추가] 이미지에 거리 텍스트를 그리는 로직 ✨
+                    # 마커의 첫 번째 코너 좌표를 가져옴
+                    top_left_corner = corners[i][0][0]
+                    text_position = (int(top_left_corner[0]), int(top_left_corner[1] - 15))
+                    distance_text = f"Dist: {distance_z:.2f}m"
+                    
+                    # 프레임에 텍스트를 그림
+                    cv2.putText(frame, distance_text, text_position, 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             
             # 6. [흐름 B] 시각화용 데이터 전송
             _, annotated_image_binary = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
