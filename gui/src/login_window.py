@@ -75,15 +75,22 @@ class LoginWindow(QMainWindow):
         try:
             # 로그인 요청 전송
             body = json.dumps(message).encode('utf-8')
-            packet = len(body).to_bytes(4, 'big') + body + b'\n'
+            header = len(body).to_bytes(4, 'big')
+            packet = header + body + b'\n'
             self.sock.sendall(packet)
             if DEBUG:
-                print(f"{self.DEBUG_TAG['AUTH']} 인증 요청: {message}")
+                print(f"{self.DEBUG_TAG['AUTH']} 인증 요청:")
+                print(f"  - 헤더 (4바이트): {header.hex()} (길이: {len(body)})")
+                print(f"  - 바디: {message}")
+                print(f"  - 전체 패킷: {packet!r}")
 
             # 응답 수신
             response = self.sock.recv(4096)
             if DEBUG:
-                print(f"{self.DEBUG_TAG['AUTH']} 수신된 응답: {response}")
+                print(f"{self.DEBUG_TAG['AUTH']} 수신된 응답:")
+                print(f"  - 헤더 (4바이트): {response[:4].hex()} (길이: {int.from_bytes(response[:4], 'big')})")
+                print(f"  - 바디: {response[4:].decode().strip()}")
+                print(f"  - 전체 패킷: {response!r}")
 
             response_data = json.loads(response[4:].decode())
             if DEBUG:
