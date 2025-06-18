@@ -1,6 +1,6 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Login Request2",
+    "title": "Login Request",
     "type": "object",
     "properties": {
         "user_id": {

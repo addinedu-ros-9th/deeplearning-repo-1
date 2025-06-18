@@ -1,12 +1,68 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Schema title",
-    "description": "Description of the schema",
+    "title": "Get Logs Request",
     "type": "object",
     "properties": {
-        "propertyName": {
-            "description": "The propertyName description",
-            "type": "string"
+        "cmd": {
+            "type": "string",
+            "const": "get_logs",
+            "description": "명령 종류 (고정값: get_logs)"
+        },
+        "filters": {
+            "type": "object",
+            "description": "로그 필터 조건",
+            "properties": {
+                "case_type": {
+                    "type": "string",
+                    "description": "사건 유형 (예: danger, emergency 등)"
+                },
+                "is_checked": {
+                    "type": "integer",
+                    "enum": [
+                        0,
+                        1
+                    ],
+                    "description": "확인 여부 (0: 미확인, 1: 확인)"
+                },
+                "robot_id": {
+                    "type": "string",
+                    "description": "조회 대상 로봇 ID"
+                },
+                "timestamp_range": {
+                    "type": "array",
+                    "description": "조회 기간 범위 [시작, 끝]",
+                    "items": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                }
+            },
+            "required": ["timestamp_range"]
+        },
+        "order_by": {
+            "type": "string",
+            "enum": [
+                "timestamp",
+                "robot_id"
+            ],
+            "description": "정렬 기준 필드"
+        },
+        "order": {
+            "type": "string",
+            "enum": [
+                "asc",
+                "desc"
+            ],
+            "description": "정렬 방향 (오름차순/내림차순)"
         }
-    }
+    },
+    "required": [
+        "cmd",
+        "filters",
+        "order_by",
+        "order"
+    ],
+    "additionalProperties": false
 }

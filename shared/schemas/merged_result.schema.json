@@ -50,6 +50,6 @@
       "description": "로봇의 현재 위치 (예: BASE, A, B)"
     }
   },
-  "required": ["frame_id", "detections", "robot_status", "location"],
+  "required": ["frame_id", "timestamp", "detections", "robot_status", "location"],
   "additionalProperties": false
 }
