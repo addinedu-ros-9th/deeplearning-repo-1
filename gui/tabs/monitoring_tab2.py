@@ -214,25 +214,30 @@ class MonitoringTab(QWidget):
                 self.enable_movement_buttons()
     
     def send_move_to_a_command(self):
+<<<<<<< HEAD:gui/tabs/monitoring_tab2.py
+=======
+        """A 지역으로 이동 명령을 전송"""
+>>>>>>> 12f88def660687a03e95a18a3a1d5c493d0083fc:gui/tabs/monitoring_tab.py
         if self.current_location != 'A' and not self.is_moving:
             self.robot_command.emit("MOVE_TO_A")
-            self.animate_robot_movement('A')
-            self.update_status("system", "A 지점으로 이동 중...")
-            self.update_robot_status("moving")
+            if DEBUG:
+                print(f"A 지역 이동 명령 전송")
 
     def send_move_to_b_command(self):
+<<<<<<< HEAD:gui/tabs/monitoring_tab2.py
+=======
+        """B 지역으로 이동 명령을 전송"""
+>>>>>>> 12f88def660687a03e95a18a3a1d5c493d0083fc:gui/tabs/monitoring_tab.py
         if self.current_location != 'B' and not self.is_moving:
             self.robot_command.emit("MOVE_TO_B")
-            self.animate_robot_movement('B')
-            self.update_status("system", "B 지점으로 이동 중...")
-            self.update_robot_status("moving")
+            if DEBUG:
+                print(f"B 지역 이동 명령 전송")
 
     def send_return_to_base_command(self):
         if self.current_location != 'BASE' and not self.is_moving:
             self.robot_command.emit("RETURN_TO_BASE")
-            self.animate_robot_movement('BASE')
-            self.update_status("system", "기지로 복귀 중...")
-            self.update_robot_status("moving")
+            if DEBUG:
+                print(f"기지 복귀 명령 전송")
 
     def start_stream(self):
         try:
