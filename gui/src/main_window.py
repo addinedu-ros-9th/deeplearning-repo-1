@@ -79,6 +79,7 @@ class DataReceiverThread(QThread):
                     # 2. 전체 길이 계산
                     total_length = int.from_bytes(header, 'big')
                     if DEBUG:
+                        print("-----------------------------------------------------------")
                         print(f"\n{DEBUG_TAG['RECV']} 메시지 수신 시작:")
                         print(f"  - 헤더: {header!r} (0x{header.hex()})")
                         print(f"  - 전체 길이: {total_length} 바이트")
