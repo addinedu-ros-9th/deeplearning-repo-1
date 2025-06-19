@@ -30,13 +30,14 @@ class MonitoringTab(QWidget):
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
-        'BASE': QPoint(250, 340),    # 기지 위치
-        'A': QPoint(180, 120),         # A 구역 위치
-        'B': QPoint(320, 120),        # B 구역 위치
-        'BASE_A_MID': QPoint(215, 230),  # BASE-A 중간지점
-        'BASE_B_MID': QPoint(285, 230),  # BASE-B 중간지점
-        'A_B_MID': QPoint(250, 120)       # A-B 중간지점
+        'BASE': QPoint(250, 330),        # 기지 위치
+        'A': QPoint(180, 110),           # A 구역 위치
+        'B': QPoint(320, 110),           # B 구역 위치
+        'BASE_A_MID': QPoint(215, 220),  # BASE-A 중간지점
+        'BASE_B_MID': QPoint(285, 220),  # BASE-B 중간지점
+        'A_B_MID': QPoint(250, 110)      # A-B 중간지점
     }
+
     
     # 각 경로별 중간지점 매핑
     PATH_MIDPOINTS = {
@@ -282,14 +283,20 @@ class MonitoringTab(QWidget):
                 self.btn_move_to_a.setEnabled(True)
                 self.btn_move_to_b.setEnabled(True)
                 self.btn_return_base.setEnabled(False)
+                if DEBUG:
+                    print("BASE 위치: A, B 버튼 활성화")
             elif self.current_location == 'A':
-                self.btn_move_to_a.setEnabled(False)
+                self.btn_move_to_a.setEnabled(False)  # A에 있을 때는 A로 이동 불가
                 self.btn_move_to_b.setEnabled(True)
                 self.btn_return_base.setEnabled(True)
+                if DEBUG:
+                    print("A 위치: B, BASE 버튼 활성화")
             elif self.current_location == 'B':
                 self.btn_move_to_a.setEnabled(True)
-                self.btn_move_to_b.setEnabled(False)
+                self.btn_move_to_b.setEnabled(False)  # B에 있을 때는 B로 이동 불가
                 self.btn_return_base.setEnabled(True)
+                if DEBUG:
+                    print("B 위치: A, BASE 버튼 활성화")
 
     def update_robot_status(self, status: str):
         """로봇 상태 업데이트"""
