@@ -326,17 +326,18 @@ class MonitoringTab(QWidget):
     def start_stream(self):
         """영상 스트리밍을 시작합니다 (한 번 시작하면 끌 수 없음)"""
         try:
-            if not self.streaming:  # 아직 스트리밍이 시작되지 않은 경우에만
+            if not self.streaming:
                 self.streaming = True
+                self.stream_command.emit(True)
+                self.btn_start_video_stream.setEnabled(False)
                 
-                # 버튼 상태 업데이트
-                sender = self.sender()
-                if sender:
-                    sender.setText("영상 스트리밍 중")
-                    sender.setEnabled(False)  # 버튼 비활성화
-                    
+                # 모든 이동 버튼 활성화
+                self.btn_move_to_A.setEnabled(True)
+                self.btn_move_to_B.setEnabled(True)
+                self.btn_return_home.setEnabled(True)
+                
                 if DEBUG:
-                    print("영상 스트리밍 시작됨")
+                    print("스트리밍 시작: 이동 버튼 활성화")
             
         except Exception as e:
             if DEBUG:
