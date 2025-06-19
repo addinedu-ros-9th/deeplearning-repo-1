@@ -30,12 +30,12 @@ class MonitoringTab(QWidget):
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
-        'BASE': QPoint(150, 300),    # 기지 위치
-        'A': QPoint(80, 80),         # A 구역 위치
-        'B': QPoint(220, 80),        # B 구역 위치
-        'BASE_A_MID': QPoint(115, 190),  # BASE-A 중간지점
-        'BASE_B_MID': QPoint(185, 190),  # BASE-B 중간지점
-        'A_B_MID': QPoint(150, 80)       # A-B 중간지점
+        'BASE': QPoint(220, 370),    # 기지 위치
+        'A': QPoint(150, 150),         # A 구역 위치
+        'B': QPoint(290, 150),        # B 구역 위치
+        'BASE_A_MID': QPoint(185, 260),  # BASE-A 중간지점
+        'BASE_B_MID': QPoint(255, 260),  # BASE-B 중간지점
+        'A_B_MID': QPoint(220, 150)       # A-B 중간지점
     }
     
     # 각 경로별 중간지점 매핑
@@ -81,6 +81,11 @@ class MonitoringTab(QWidget):
             self.btn_move_to_B = self.findChild(QPushButton, "btn_move_to_B")
             self.btn_return_home = self.findChild(QPushButton, "btn_return_to_home")
             self.btn_start_video_stream = self.findChild(QPushButton, "btn_start_video_stream")
+
+            # 이동 버튼들 초기 비활성화
+            self.btn_move_to_A.setEnabled(False)
+            self.btn_move_to_B.setEnabled(False)
+            self.btn_return_home.setEnabled(False)
 
             self.btn_move_to_A.clicked.connect(self.send_move_to_a_command)
             self.btn_move_to_B.clicked.connect(self.send_move_to_b_command)
@@ -228,7 +233,7 @@ class MonitoringTab(QWidget):
         self.target_location = target_location
         self.disable_movement_buttons()
         
-        # 경로에 따른 중간 지점 찾기
+        # 경로에 따른 중간지점 찾기
         path_key = (self.current_location, target_location)
         mid_point = self.PATH_MIDPOINTS.get(path_key)
         
@@ -284,11 +289,16 @@ class MonitoringTab(QWidget):
             
             # 상태에 따른 UI 업데이트
             if status == 'moving':
+                # moving 상태일 때는 모든 이동 버튼 비활성화
                 self.disable_movement_buttons()
-            elif status == 'patrolling':
-                self.enable_movement_buttons()
-            elif status == 'idle':
-                self.enable_movement_buttons()
+                if DEBUG:
+                    print("로봇 이동 중: 모든 이동 버튼 비활성화")
+            elif status == 'patrolling' or status == 'idle':
+                # 순찰 중이거나 대기 중일 때는 현재 위치에 따라 버튼 활성화
+                if self.streaming:  # 스트리밍 중인 경우에만 버튼 활성화
+                    self.enable_movement_buttons()
+                    if DEBUG:
+                        print(f"로봇 {status}: 이동 버튼 활성화 (현재 위치: {self.current_location})")
 
     def send_move_to_a_command(self):
         """A 지역으로 이동 명령을 전송"""
@@ -331,13 +341,11 @@ class MonitoringTab(QWidget):
                 self.stream_command.emit(True)
                 self.btn_start_video_stream.setEnabled(False)
                 
-                # 모든 이동 버튼 활성화
-                self.btn_move_to_A.setEnabled(True)
-                self.btn_move_to_B.setEnabled(True)
-                self.btn_return_home.setEnabled(True)
+                # 현재 위치에 따라 이동 버튼 활성화
+                self.enable_movement_buttons()
                 
                 if DEBUG:
-                    print("스트리밍 시작: 이동 버튼 활성화")
+                    print("스트리밍 시작: 이동 버튼 활성화됨")
             
         except Exception as e:
             if DEBUG:
