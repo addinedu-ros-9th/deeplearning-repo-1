@@ -4,7 +4,7 @@ import json
 import socket
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.uic import loadUi
-from gui.src.main_window2 import MainWindow
+from gui.src.main_window import MainWindow
 
 # 디버그 모드: True이면 터미널에 로그를 출력합니다
 DEBUG = True
