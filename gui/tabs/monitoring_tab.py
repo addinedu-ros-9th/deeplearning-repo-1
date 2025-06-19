@@ -30,16 +30,31 @@ class MonitoringTab(QWidget):
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
-        'BASE': QPoint(150, 250),  # 기지 위치
-        'A': QPoint(50, 100),      # A 구역 위치
-        'B': QPoint(250, 100)      # B 구역 위치
+        'BASE': QPoint(150, 300),    # 기지 위치
+        'A': QPoint(80, 80),         # A 구역 위치
+        'B': QPoint(220, 80),        # B 구역 위치
+        'BASE_A_MID': QPoint(115, 190),  # BASE-A 중간지점
+        'BASE_B_MID': QPoint(185, 190),  # BASE-B 중간지점
+        'A_B_MID': QPoint(150, 80)       # A-B 중간지점
+    }
+    
+    # 각 경로별 중간지점 매핑
+    PATH_MIDPOINTS = {
+        ('BASE', 'A'): 'BASE_A_MID',
+        ('A', 'BASE'): 'BASE_A_MID',
+        ('BASE', 'B'): 'BASE_B_MID',
+        ('B', 'BASE'): 'BASE_B_MID',
+        ('A', 'B'): 'A_B_MID',
+        ('B', 'A'): 'A_B_MID'
     }
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.current_location = 'BASE'  # 현재 위치
-        self.current_status = 'idle'    # 현재 상태
-        self.is_moving = False         # 이동 중 여부
+        self.current_location = 'BASE'     # 현재 위치
+        self.target_location = None        # 목표 위치
+        self.current_status = 'idle'       # 현재 상태
+        self.is_moving = False            # 이동 중 여부
+        self.waiting_server_confirm = False # 서버 확인 대기 중 여부
         self.init_ui()
         self.init_map()
         self.init_robot()
@@ -204,22 +219,40 @@ class MonitoringTab(QWidget):
             self.current_location = location
 
     def animate_robot_movement(self, target_location):
-        """로봇 이동 애니메이션 시작"""
-        if self.is_moving or target_location not in self.LOCATIONS:
+        """이동 명령 시 중간 지점으로 먼저 이동"""
+        if target_location not in ['A', 'B', 'BASE'] or self.is_moving:
             return
             
         self.is_moving = True
+        self.waiting_server_confirm = True
+        self.target_location = target_location
         self.disable_movement_buttons()
         
+        # 경로에 따른 중간 지점 찾기
+        path_key = (self.current_location, target_location)
+        mid_point = self.PATH_MIDPOINTS.get(path_key)
+        
+        if not mid_point:
+            if DEBUG:
+                print(f"올바르지 않은 경로: {path_key}")
+            return
+            
+        # 중간 지점으로 이동
         start_pos = self.robot_label.pos()
-        target_pos = self.LOCATIONS[target_location]
+        mid_pos = self.LOCATIONS[mid_point]
         
         self.robot_animation.setStartValue(start_pos)
-        self.robot_animation.setEndValue(QPoint(target_pos.x() - 15, target_pos.y() - 15))
-        self.robot_animation.start()
+        self.robot_animation.setEndValue(QPoint(mid_pos.x() - 15, mid_pos.y() - 15))
+        self.robot_animation.setDuration(1000)  # 1초
+        
+        # 중간 지점 도착 후 서버 응답 대기
+        self.robot_animation.finished.disconnect() if self.robot_animation.receivers(self.robot_animation.finished) > 0 else None
+        self.robot_animation.finished.connect(self.midpoint_reached)
         
         if DEBUG:
-            print(f"로봇 이동 시작: {self.current_location} -> {target_location}")
+            print(f"로봇 이동 시작: {self.current_location} -> {via_point} -> {target_location}")
+            
+        self.robot_animation.start()
 
     def movement_finished(self):
         """이동 애니메이션 완료 처리"""
@@ -355,8 +388,13 @@ class MonitoringTab(QWidget):
                 # 위치 정보 처리
                 if "위치:" in message:
                     location = message.split("위치:")[1].split(",")[0].strip()
-                    if location in self.LOCATIONS and location != self.current_location:
-                        self.animate_robot_movement(location)
+                    if location in self.LOCATIONS:
+                        if self.waiting_server_confirm:
+                            # 서버로부터 위치 확인을 받은 경우
+                            self.server_confirmed_location(location)
+                        elif location != self.current_location:
+                            # 일반적인 위치 업데이트
+                            self.current_location = location
             elif status_type == "detections":
                 self.detections_label.setText(message)
         except Exception as e:
@@ -364,4 +402,61 @@ class MonitoringTab(QWidget):
                 print(f"상태 업데이트 실패: {e}")
                 import traceback
                 print(traceback.format_exc())
+
+    def continue_movement(self, final_destination):
+        """중간 지점에서 최종 목적지로 이동"""
+        target_pos = self.LOCATIONS[final_destination]
+        
+        # 잠시 대기 후 다음 이동 시작
+        QTimer.singleShot(500, lambda: self._execute_final_movement(final_destination, target_pos))
+        
+    def _execute_final_movement(self, final_destination, target_pos):
+        """최종 목적지로의 이동 실행"""
+        self.robot_animation.finished.disconnect()  # 기존 연결 해제
+        self.robot_animation.finished.connect(self.movement_finished)  # 원래 완료 핸들러 복원
+        
+        # 최종 목적지로 이동
+        self.robot_animation.setStartValue(self.robot_label.pos())
+        self.robot_animation.setEndValue(QPoint(target_pos.x() - 15, target_pos.y() - 15))
+        self.robot_animation.setDuration(1000)  # 1초
+        self.robot_animation.start()
+        
+        # 현재 위치 업데이트
+        self.current_location = final_destination
+
+    def midpoint_reached(self):
+        """중간 지점 도착 후 서버의 위치 확인 신호 대기"""
+        if DEBUG:
+            print(f"중간 지점 도착. 서버의 위치 확인 대기 중... (목표: {self.target_location})")
+        self.waiting_server_confirm = True
+
+    def server_confirmed_location(self, confirmed_location):
+        """서버로부터 위치 확인을 받았을 때 호출"""
+        if not self.waiting_server_confirm:
+            return
+            
+        if confirmed_location == self.target_location:
+            # 최종 목적지로 이동
+            self.complete_movement_to_target()
+        else:
+            if DEBUG:
+                print(f"위치 불일치: 예상={self.target_location}, 실제={confirmed_location}")
+
+    def complete_movement_to_target(self):
+        """최종 목적지로 이동"""
+        self.waiting_server_confirm = False
+        target_pos = self.LOCATIONS[self.target_location]
+        
+        # 최종 목적지로 이동 시작
+        self.robot_animation.setStartValue(self.robot_label.pos())
+        self.robot_animation.setEndValue(QPoint(target_pos.x() - 15, target_pos.y() - 15))
+        self.robot_animation.setDuration(1000)
+        
+        self.robot_animation.finished.disconnect()
+        self.robot_animation.finished.connect(self.movement_finished)
+        
+        if DEBUG:
+            print(f"최종 목적지로 이동: {self.target_location}")
+        
+        self.robot_animation.start()
 
