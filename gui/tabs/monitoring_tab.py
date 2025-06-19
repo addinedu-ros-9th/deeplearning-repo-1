@@ -250,7 +250,7 @@ class MonitoringTab(QWidget):
         self.robot_animation.finished.connect(self.midpoint_reached)
         
         if DEBUG:
-            print(f"로봇 이동 시작: {self.current_location} -> {via_point} -> {target_location}")
+            print(f"로봇 이동 시작: {self.current_location} -> {mid_point} -> {target_location}")
             
         self.robot_animation.start()
 
@@ -293,22 +293,33 @@ class MonitoringTab(QWidget):
     def send_move_to_a_command(self):
         """A 지역으로 이동 명령을 전송"""
         if self.current_location != 'A' and not self.is_moving:
-            self.robot_command.emit("MOVE_TO_A")
             if DEBUG:
-                print(f"A 지역 이동 명령 전송")
+                print(f"A 지역 이동 명령 전송 시도 (현재 위치: {self.current_location})")
+            self.robot_command.emit("MOVE_TO_A")
+            self.animate_robot_movement('A')
+            if DEBUG:
+                print("A 지역 이동 명령 전송 완료")print(f"A 지역 이동 명령 전송")
 
     def send_move_to_b_command(self):
         """B 지역으로 이동 명령을 전송"""
         if self.current_location != 'B' and not self.is_moving:
-            self.robot_command.emit("MOVE_TO_B")
             if DEBUG:
+                print(f"B 지역 이동 명령 전송 시도 (현재 위치: {self.current_location})")
+            self.robot_command.emit("MOVE_TO_B")
+            self.animate_robot_movement('B')
+            if DEBUG:
+                print("B 지역 이동 명령 전송 완료")
                 print(f"B 지역 이동 명령 전송")
 
     def send_return_to_base_command(self):
         """기지로 복귀 명령을 전송"""
         if self.current_location != 'BASE' and not self.is_moving:
-            self.robot_command.emit("RETURN_TO_BASE")
             if DEBUG:
+                print(f"BASE로 이동 명령 전송 시도 (현재 위치: {self.current_location})")
+            self.robot_command.emit("RETURN_TO_BASE")
+            self.animate_robot_movement('BASE')
+            if DEBUG:
+                print("BASE 이동 명령 전송 완료")
                 print(f"기지 복귀 명령 전송")
 
     def start_stream(self):
