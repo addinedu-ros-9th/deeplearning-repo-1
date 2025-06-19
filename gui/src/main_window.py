@@ -169,11 +169,14 @@ class DataReceiverThread(QThread):
 
 class MainWindow(QMainWindow):
     """메인 윈도우"""
-    def __init__(self):
+    def __init__(self, user_name=None):
         super().__init__()
         if DEBUG:
             print(f"\n{DEBUG_TAG['INIT']} MainWindow 초기화 시작")
 
+        # 사용자 이름 저장
+        self.user_name = user_name
+        
         # UI 설정
         self.setup_ui()
         
@@ -195,7 +198,7 @@ class MainWindow(QMainWindow):
             self.setWindowTitle("NeighBot Monitoring System")
 
             # 모니터링 탭 설정
-            self.monitoring_tab = MonitoringTab()
+            self.monitoring_tab = MonitoringTab(user_name=self.user_name)
             self.tabWidget.removeTab(0)
             self.tabWidget.insertTab(0, self.monitoring_tab, 'Main Monitoring')
             self.tabWidget.setCurrentIndex(0)

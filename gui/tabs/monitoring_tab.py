@@ -18,7 +18,7 @@ from PyQt5.uic import loadUi
 DEBUG = True
 
 # UI 파일 경로
-MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab3.ui')
+MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab4.ui')
 MONITORING_TAP_MAP_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'neighbot_map6.jpg')
 
 # MonitoringTab: Main Monitoring 탭의 UI 로드만 담당
@@ -30,12 +30,12 @@ class MonitoringTab(QWidget):
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
-        'BASE': QPoint(250, 310),        # 기지 위치
-        'A': QPoint(175, 110),           # A 구역 위치
-        'B': QPoint(330, 110),           # B 구역 위치
-        'BASE_A_MID': QPoint(210, 210),  # BASE-A 중간지점
-        'BASE_B_MID': QPoint(290, 210),  # BASE-B 중간지점
-        'A_B_MID': QPoint(250, 110)      # A-B 중간지점
+        'BASE': QPoint(250, 270),        # 기지 위치
+        'A': QPoint(190, 125),           # A 구역 위치
+        'B': QPoint(315, 125),           # B 구역 위치
+        'BASE_A_MID': QPoint(220, 198),  # BASE-A 중간지점
+        'BASE_B_MID': QPoint(283, 198),  # BASE-B 중간지점 
+        'A_B_MID': QPoint(253, 125)      # A-B 중간지점
     }
 
     # 각 경로별 중간지점 매핑
@@ -48,13 +48,14 @@ class MonitoringTab(QWidget):
         ('B', 'A'): 'A_B_MID'
     }
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, user_name=None):
         super().__init__(parent)
         self.current_location = 'BASE'     # 현재 위치
         self.target_location = None        # 목표 위치
         self.current_status = 'idle'       # 현재 상태
         self.is_moving = False            # 이동 중 여부
         self.waiting_server_confirm = False # 서버 확인 대기 중 여부
+        self.user_name = user_name or "사용자"  # 사용자 이름 (기본값 설정)
         self.init_ui()
         self.init_map()
         self.init_robot()
@@ -75,6 +76,16 @@ class MonitoringTab(QWidget):
 
             if DEBUG:
                 print("MonitoringTab UI 로드 완료")
+            
+            # 사용자 이름 표시 라벨 설정
+            self.label_user_name = self.findChild(QLabel, "label_user_name")
+            if self.label_user_name:
+                self.label_user_name.setText(f"사용자: {self.user_name}")
+                if DEBUG:
+                    print(f"사용자 이름 설정됨: {self.user_name}")
+            else:
+                if DEBUG:
+                    print("경고: label_user_name을 찾을 수 없습니다.")
                 
             # 이동 명령 버튼 시그널 연결
             self.btn_move_to_a = self.findChild(QPushButton, "btn_move_to_a")
@@ -116,9 +127,9 @@ class MonitoringTab(QWidget):
             
             # 상태 라벨 초기화
             self.connectivity_label.setText("연결 대기 중...")
-            self.system_status_label.setText("시스템 초기화 중...")
-            self.detections_label.setText("탐지 대기 중...")
-            self.live_feed_label.setText("스트리밍 대기 중...")
+            self.system_status_label.setText("스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+            self.detections_label.setText("스트리밍을 시작하면 탐지 결과가 표시됩니다")
+            self.live_feed_label.setText("스트리밍 비활성화 - 시작 버튼을 눌러주세요")
             
             if DEBUG:
                 print("UI 요소 초기화 완료:")
@@ -156,7 +167,7 @@ class MonitoringTab(QWidget):
                 return
 
             # 4) 약간의 지연 후 이미지 크기 조정
-            QTimer.singleShot(100, self.resize_map)
+            QTimer.singleShot(500, self.resize_map)
 
             if DEBUG:
                 print("맵 이미지 로드 시작")
@@ -402,6 +413,9 @@ class MonitoringTab(QWidget):
                 self.stream_command.emit(True)
                 self.btn_start_video_stream.setEnabled(False)
                 
+                # 영상 피드 초기화
+                self.live_feed_label.setText("스트리밍 시작 중...")
+                
                 # 현재 위치에 따라 이동 버튼 활성화
                 self.enable_movement_buttons()
                 
@@ -462,6 +476,12 @@ class MonitoringTab(QWidget):
             if status_type == "connectivity":
                 self.connectivity_label.setText(message)
             elif status_type == "system":
+                # 스트리밍이 활성화되어 있지 않으면 스트리밍 비활성화 메시지 표시
+                if not self.streaming:
+                    self.system_status_label.setText("스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+                    return
+                
+                # 스트리밍이 활성화된 경우에만 시스템 상태 업데이트
                 self.system_status_label.setText(message)
                 
                 # 로봇 상태 정보 처리
@@ -499,7 +519,11 @@ class MonitoringTab(QWidget):
                                 if self.streaming:
                                     self.enable_movement_buttons()
             elif status_type == "detections":
-                self.detections_label.setText(message)
+                # 스트리밍이 활성화되어 있지 않으면 메시지 표시하지 않음
+                if not self.streaming:
+                    self.detections_label.setText("스트리밍을 시작하면 탐지 결과가 표시됩니다")
+                else:
+                    self.detections_label.setText(message)
         except Exception as e:
             if DEBUG:
                 print(f"상태 업데이트 실패: {e}")

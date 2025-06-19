@@ -125,8 +125,11 @@ class LoginWindow(QMainWindow):
                 self.welcome_msg.show()
                 
                 try:
-                    # 메인 윈도우 준비
-                    self.main_window = MainWindow()
+                    # 사용자 이름 가져오기
+                    user_name = response_data.get("user_name", "사용자")
+                    
+                    # 메인 윈도우 준비 (사용자 이름 전달)
+                    self.main_window = MainWindow(user_name=user_name)
                     
                     # 2초 후 환영 메시지 닫고 메인 윈도우 표시
                     QTimer.singleShot(2000, self.close_welcome_and_open_main)
