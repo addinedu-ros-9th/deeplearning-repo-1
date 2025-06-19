@@ -26,7 +26,7 @@ DEBUG_TAG = {
 
 # 서버 설정
 SERVER_IP = "127.0.0.1"  # localhost
-SERVER_PORT = 9004       # 메인 통신 포트
+GUI_MERGER_PORT = 9004       # data_merger 통신 포트
 ROBOT_COMMANDER_PORT = 9006  # 로봇 커맨더 포트
 
 # 지역 이동 명령 목록
@@ -56,12 +56,12 @@ class DataReceiverThread(QThread):
         """메인 수신 루프"""
         if DEBUG:
             print(f"{DEBUG_TAG['INIT']} 데이터 수신 스레드 시작")
-            print(f"{DEBUG_TAG['CONN']} 서버 연결 시도: {SERVER_IP}:{SERVER_PORT}")
+            print(f"{DEBUG_TAG['CONN']} 서버 연결 시도: {SERVER_IP}:{GUI_MERGER_PORT}")
 
         # 소켓 생성 및 연결
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.socket.connect((SERVER_IP, SERVER_PORT))
+            self.socket.connect((SERVER_IP, GUI_MERGER_PORT))
             self.connection_status.emit(True)
             if DEBUG:
                 print(f"{DEBUG_TAG['CONN']} 서버 연결 성공")
@@ -261,7 +261,7 @@ class MainWindow(QMainWindow):
                     if DEBUG:
                         print(f"{DEBUG_TAG['CONN']} 새 명령 소켓 생성")
                     self.command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    self.command_socket.connect((SERVER_IP, SERVER_PORT))
+                    self.command_socket.connect((SERVER_IP, GUI_MERGER_PORT))
 
                 # 메인 서버로 전송
                 self.command_socket.sendall(packet)
