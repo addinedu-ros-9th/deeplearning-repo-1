@@ -112,7 +112,7 @@ class SystemManager: # 시스템의 전체 컴포넌트를 관리하는 클래�
         self.data_merger = DataMerger(
             image_queue=self.image_for_merger_queue, # ImageManager로부터 이미지 받을 큐
             event_queue=self.event_result_queue, # EventAnalyzer로부터 이벤트 받을 큐
-            gui_addr=(GUI_HOST, GUI_MERGER_PORT), # GUI로 결과 보낼 주소
+            gui_listen_addr=(GUI_HOST, GUI_MERGER_PORT), # GUI로 결과 보낼 주소
             robot_status=self.robot_status # 공유할 로봇 상태 객체
         )
         
