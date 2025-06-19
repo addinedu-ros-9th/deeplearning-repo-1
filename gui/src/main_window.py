@@ -188,6 +188,11 @@ class MainWindow(QMainWindow):
         try:
             # 기본 UI 로드
             loadUi('./gui/ui/main_window.ui', self)
+            
+            # 윈도우 크기 설정
+            # self.setMinimumSize(1024, 768)  # 최소 크기 설정
+            self.resize(1200, 850)  # 초기 윈도우 크기 설정
+            self.setWindowTitle("NeighBot Monitoring System")
 
             # 모니터링 탭 설정
             self.monitoring_tab = MonitoringTab()

@@ -30,15 +30,14 @@ class MonitoringTab(QWidget):
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
-        'BASE': QPoint(250, 330),        # 기지 위치
-        'A': QPoint(180, 110),           # A 구역 위치
-        'B': QPoint(320, 110),           # B 구역 위치
-        'BASE_A_MID': QPoint(215, 220),  # BASE-A 중간지점
-        'BASE_B_MID': QPoint(285, 220),  # BASE-B 중간지점
+        'BASE': QPoint(250, 310),        # 기지 위치
+        'A': QPoint(175, 110),           # A 구역 위치
+        'B': QPoint(330, 110),           # B 구역 위치
+        'BASE_A_MID': QPoint(210, 210),  # BASE-A 중간지점
+        'BASE_B_MID': QPoint(290, 210),  # BASE-B 중간지점
         'A_B_MID': QPoint(250, 110)      # A-B 중간지점
     }
 
-    
     # 각 경로별 중간지점 매핑
     PATH_MIDPOINTS = {
         ('BASE', 'A'): 'BASE_A_MID',
@@ -227,10 +226,11 @@ class MonitoringTab(QWidget):
     def animate_robot_movement(self, target_location):
         """이동 명령 시 중간 지점으로 먼저 이동"""
         if target_location not in ['A', 'B', 'BASE'] or self.is_moving:
+            if DEBUG:
+                print(f"이동 불가: 목적지={target_location}, 이동 중={self.is_moving}")
             return
             
         self.is_moving = True
-        self.waiting_server_confirm = True
         self.target_location = target_location
         self.disable_movement_buttons()
         
@@ -252,7 +252,8 @@ class MonitoringTab(QWidget):
         self.robot_animation.setDuration(1000)  # 1초
         
         # 중간 지점 도착 후 서버 응답 대기
-        self.robot_animation.finished.disconnect() if self.robot_animation.receivers(self.robot_animation.finished) > 0 else None
+        if self.robot_animation.receivers(self.robot_animation.finished) > 0:
+            self.robot_animation.finished.disconnect()
         self.robot_animation.finished.connect(self.midpoint_reached)
         
         if DEBUG:
@@ -262,9 +263,49 @@ class MonitoringTab(QWidget):
 
     def movement_finished(self):
         """이동 애니메이션 완료 처리"""
-        self.is_moving = False
+        if not self.is_moving:
+            # 이미 이동이 완료되었으면 버튼 상태만 업데이트
+            if self.streaming:
+                self.enable_movement_buttons()
+        
         if DEBUG:
-            print(f"로봇 이동 완료: {self.current_location}")
+            print(f"로봇 이동 애니메이션 완료: {self.current_location}")
+
+    def complete_movement_to_target(self):
+        """최종 목적지로 이동"""
+        if DEBUG:
+            print(f"최종 목적지로 이동 시작: {self.target_location}")
+            
+        self.waiting_server_confirm = False
+        target_pos = self.LOCATIONS[self.target_location]
+        
+        # 최종 목적지로 이동 시작
+        self.robot_animation.setStartValue(self.robot_label.pos())
+        self.robot_animation.setEndValue(QPoint(target_pos.x() - 15, target_pos.y() - 15))
+        self.robot_animation.setDuration(1000)
+        
+        # 이전 연결 해제 및 새 연결 설정
+        if self.robot_animation.receivers(self.robot_animation.finished) > 0:
+            self.robot_animation.finished.disconnect()
+        self.robot_animation.finished.connect(self._movement_complete_callback)
+        
+        # 애니메이션 시작
+        self.robot_animation.start()
+        
+    def _movement_complete_callback(self):
+        """이동 완료 콜백 - 상태 업데이트 및 UI 갱신"""
+        # 이동 완료 처리
+        self.is_moving = False
+        self.current_location = self.target_location
+        
+        if DEBUG:
+            print(f"로봇 이동 완료: 위치={self.current_location}")
+        
+        # UI 갱신
+        if self.streaming:
+            self.enable_movement_buttons()
+            
+        # 추가 이벤트가 필요하면 여기에 추가
 
     def disable_movement_buttons(self):
         """이동 버튼 비활성화"""
@@ -422,20 +463,41 @@ class MonitoringTab(QWidget):
                 self.connectivity_label.setText(message)
             elif status_type == "system":
                 self.system_status_label.setText(message)
+                
                 # 로봇 상태 정보 처리
                 if "상태:" in message:
                     status = message.split("상태:")[1].strip()
                     self.update_robot_status(status)
+                
                 # 위치 정보 처리
                 if "위치:" in message:
-                    location = message.split("위치:")[1].split(",")[0].strip()
-                    if location in self.LOCATIONS:
-                        if self.waiting_server_confirm:
-                            # 서버로부터 위치 확인을 받은 경우
-                            self.server_confirmed_location(location)
-                        elif location != self.current_location:
-                            # 일반적인 위치 업데이트
-                            self.current_location = location
+                    location_raw = message.split("위치:")[1].split(",")[0].strip()
+                    actual_location, is_moving, destination = self.parse_location(location_raw)
+                    
+                    if actual_location:
+                        # 이동 중인 경우 중간 지점 이동 상태라고 설정
+                        if is_moving and destination:
+                            if not self.is_moving:
+                                # 이동 중으로 상태 변경
+                                self.is_moving = True
+                                self.target_location = destination
+                                if DEBUG:
+                                    print(f"이동 중 감지: {self.current_location} -> {destination}")
+                                # 이동 버튼 비활성화
+                                self.disable_movement_buttons()
+                        # 이동중이 아니고 실제 위치값(A, B, BASE)이 온 경우
+                        elif not is_moving:
+                            # 이동 중이었고, 서버에서 온 위치가 목적지와 같으면
+                            if self.is_moving and self.waiting_server_confirm and actual_location == self.target_location:
+                                if DEBUG:
+                                    print(f"목적지 도착 확인: {actual_location}, complete_movement_to_target 호출")
+                                # 최종 목적지로 이동 애니메이션 실행
+                                self.complete_movement_to_target()
+                            # 일반 위치 업데이트 (이동 중이 아닐 때)
+                            elif actual_location != self.current_location:
+                                self.current_location = actual_location
+                                if self.streaming:
+                                    self.enable_movement_buttons()
             elif status_type == "detections":
                 self.detections_label.setText(message)
         except Exception as e:
@@ -469,22 +531,47 @@ class MonitoringTab(QWidget):
         """중간 지점 도착 후 서버의 위치 확인 신호 대기"""
         if DEBUG:
             print(f"중간 지점 도착. 서버의 위치 확인 대기 중... (목표: {self.target_location})")
+            
         self.waiting_server_confirm = True
+        
+        # 디버깅용 - 5초 후 응답이 없으면 자동으로 다음 단계로 진행 (필요시 주석 해제)
+        # QTimer.singleShot(5000, self._check_server_response_timeout)
+    
+    def _check_server_response_timeout(self):
+        """서버 응답 타임아웃 체크 - 테스트용"""
+        if self.waiting_server_confirm:
+            if DEBUG:
+                print("서버 응답 타임아웃 - 자동으로 다음 단계 진행")
+            self.complete_movement_to_target()
 
     def server_confirmed_location(self, confirmed_location):
         """서버로부터 위치 확인을 받았을 때 호출"""
         if not self.waiting_server_confirm:
+            # 서버 확인을 기다리는 중이 아니면 무시
+            if DEBUG:
+                print(f"서버 확인 대기 중이 아님, 위치 무시: {confirmed_location}")
             return
-            
+        
+        # "A", "B", "BASE" 같은 실제 위치가 오면 최종 목적지로 이동
         if confirmed_location == self.target_location:
-            # 최종 목적지로 이동
+            # 목적지에 도착한 경우
+            if DEBUG:
+                print(f"목적지({confirmed_location})에 도착, complete_movement_to_target 호출")
             self.complete_movement_to_target()
+        elif "이동 중" in confirmed_location:
+            # "A 지역으로 이동 중" 같은 메시지는 계속 대기
+            if DEBUG:
+                print(f"이동 중 확인: {confirmed_location}, 계속 대기")
         else:
+            # 기대하지 않은 위치가 왔을 때
             if DEBUG:
                 print(f"위치 불일치: 예상={self.target_location}, 실제={confirmed_location}")
-
+            
     def complete_movement_to_target(self):
         """최종 목적지로 이동"""
+        if DEBUG:
+            print(f"최종 목적지로 이동 시작: {self.target_location}")
+            
         self.waiting_server_confirm = False
         target_pos = self.LOCATIONS[self.target_location]
         
@@ -493,11 +580,48 @@ class MonitoringTab(QWidget):
         self.robot_animation.setEndValue(QPoint(target_pos.x() - 15, target_pos.y() - 15))
         self.robot_animation.setDuration(1000)
         
-        self.robot_animation.finished.disconnect()
-        self.robot_animation.finished.connect(self.movement_finished)
+        # 이전 연결 해제 및 새 연결 설정
+        if self.robot_animation.receivers(self.robot_animation.finished) > 0:
+            self.robot_animation.finished.disconnect()
+        self.robot_animation.finished.connect(self._movement_complete_callback)
+        
+        # 애니메이션 시작
+        self.robot_animation.start()
+        
+    def parse_location(self, location_str):
+        """
+        위치 문자열 파싱
+        'A', 'B', 'BASE' 또는 'A 지역으로 이동 중', 'B 지역으로 이동 중' 등 모두 처리
+        
+        Returns:
+            tuple: (실제 위치(A/B/BASE), 이동중 여부, 목적지)
+        """
+        is_moving = "이동 중" in location_str
+        actual_location = None
+        destination = None
+        
+        # 이동 중인 경우 ('A 지역으로 이동 중', 'B 지역으로 이동 중', 'BASE 지역으로 이동 중')
+        if is_moving:
+            # 목적지 추출 (예: "A 지역으로 이동 중" -> 목적지 "A")
+            for loc in self.LOCATIONS:
+                if location_str.startswith(loc):
+                    destination = loc
+                    break
+            
+            # 현재 위치는 현재 self.current_location 유지 (이동 중에는 변경 안함)
+            actual_location = self.current_location
+        else:
+            # 정지 상태면 위치는 그대로 (예: "A", "B", "BASE")
+            for loc in self.LOCATIONS:
+                if location_str == loc:
+                    actual_location = loc
+                    break
         
         if DEBUG:
-            print(f"최종 목적지로 이동: {self.target_location}")
-        
-        self.robot_animation.start()
+            if is_moving:
+                print(f"위치 파싱: '{location_str}' -> 현재 위치: {actual_location}, 이동 중: {is_moving}, 목적지: {destination}")
+            else:
+                print(f"위치 파싱: '{location_str}' -> 현재 위치: {actual_location}")
+                
+        return actual_location, is_moving, destination
 

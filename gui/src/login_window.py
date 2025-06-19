@@ -2,7 +2,9 @@
 
 import json
 import socket
+import traceback  # Add traceback module
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
+from PyQt5.QtCore import QTimer, Qt
 from PyQt5.uic import loadUi
 from gui.src.main_window import MainWindow
 
@@ -28,9 +30,13 @@ class LoginWindow(QMainWindow):
             print(f"{self.DEBUG_TAG['INIT']} LoginWindow 초기화")
         
         self.sock = None
+        self.welcome_msg = None  # 환영 메시지 팝업 인스턴스를 저장할 속성
+        self.main_window = None  # 메인 윈도우 인스턴스를 저장할 속성
         self.setup_connection()
         
         loadUi('./gui/ui/login.ui', self)
+        self.setWindowTitle("NeighBot 로그인")
+        
         self.btn_login.clicked.connect(self.handle_login)
         self.input_id.returnPressed.connect(self.handle_login)
         self.input_pw.returnPressed.connect(self.handle_login)
@@ -95,6 +101,7 @@ class LoginWindow(QMainWindow):
                 print(f"  - 전체 패킷: {response!r}")
 
             # 7) 응답 파싱
+            resp_len = int.from_bytes(response[:4], 'big')
             response_data = json.loads(response[4:4+resp_len].decode())
             if DEBUG:
                 print(f"{self.DEBUG_TAG['AUTH']} 응답 파싱 결과: {response_data}")
@@ -103,9 +110,37 @@ class LoginWindow(QMainWindow):
             if response_data.get("result") == "succeed":
                 if DEBUG:
                     print(f"{self.DEBUG_TAG['AUTH']} 인증 성공")
-                self.main_window = MainWindow()
-                self.main_window.show()
-                self.close()
+                
+                # 환영 메시지 팝업 표시 (클래스 속성에 저장)
+                self.welcome_msg = QMessageBox(self)
+                self.welcome_msg.setWindowTitle("환영합니다")
+                self.welcome_msg.setIcon(QMessageBox.Information)
+                self.welcome_msg.setText(f"{response_data.get('user_name')}님 환영합니다.")
+                # X 버튼과 OK 버튼을 추가하여 사용자가 직접 닫을 수 있게 함
+                self.welcome_msg.setStandardButtons(QMessageBox.Ok)
+                # 모달리스 설정 - 팝업이 다른 창 조작을 방해하지 않게 함
+                self.welcome_msg.setWindowModality(Qt.NonModal)
+                # 타이머에 의한 자동 닫기가 실패해도 사용자가 OK를 눌러 닫을 수 있음
+                self.welcome_msg.buttonClicked.connect(self.close_welcome_and_open_main)
+                self.welcome_msg.show()
+                
+                try:
+                    # 메인 윈도우 준비
+                    self.main_window = MainWindow()
+                    
+                    # 2초 후 환영 메시지 닫고 메인 윈도우 표시
+                    QTimer.singleShot(2000, self.close_welcome_and_open_main)
+                except Exception as e:
+                    if DEBUG:
+                        print(f"{self.DEBUG_TAG['ERR']} 메인 윈도우 생성 실패: {e}")
+                        traceback.print_exc()
+                    
+                    # 메인 윈도우 생성에 실패하면 환영 메시지를 즉시 닫고 오류 메시지 표시
+                    if self.welcome_msg:
+                        self.welcome_msg.close()
+                        self.welcome_msg = None
+                    
+                    QMessageBox.critical(self, "오류", f"메인 윈도우를 생성하는 중 오류가 발생했습니다:\n{e}")
             else:
                 if DEBUG:
                     print(f"{self.DEBUG_TAG['AUTH']} 인증 실패")
@@ -114,14 +149,46 @@ class LoginWindow(QMainWindow):
         except Exception as e:
             if DEBUG:
                 print(f"{self.DEBUG_TAG['ERR']} 처리 실패: {e}")
+                traceback.print_exc()
             QMessageBox.critical(self, "오류", f"로그인 처리 중 오류가 발생했습니다:\n{e}")
             self.sock = None
 
+    def close_welcome_and_open_main(self, button=None):
+        """환영 메시지를 닫고 메인 윈도우를 표시
+        
+        Args:
+            button: QMessageBox에서 클릭된 버튼 (있는 경우)
+        """
+        if DEBUG:
+            print(f"{self.DEBUG_TAG['INIT']} 환영 메시지 닫기 및 메인 윈도우 표시")
+        
+        # 팝업이 이미 닫혀있지 않은지 확인
+        if self.welcome_msg:
+            self.welcome_msg.close()
+            self.welcome_msg = None
+        
+        # 메인 윈도우가 준비되었는지 확인
+        if self.main_window:
+            # 메인 윈도우가 아직 표시되지 않았는지 확인
+            if not self.main_window.isVisible():
+                self.main_window.show()
+                self.close()
+
     def closeEvent(self, event):
-        """윈도우 종료 시 소켓 정리"""
+        """윈도우 종료 시 정리 작업"""
+        # 환영 메시지가 아직 표시되어 있다면 닫기
+        if self.welcome_msg:
+            try:
+                self.welcome_msg.close()
+                self.welcome_msg = None
+            except:
+                pass
+            
+        # 소켓 연결 닫기
         if self.sock:
             try:
                 self.sock.close()
             except:
                 pass
+        
         super().closeEvent(event)
