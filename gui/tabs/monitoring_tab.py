@@ -279,23 +279,26 @@ class MonitoringTab(QWidget):
                 print(f"기지 복귀 명령 전송")
 
     def start_stream(self):
-        """영상 스트리밍 표시를 시작/중지합니다."""
+        """영상 스트리밍을 시작합니다 (한 번 시작하면 끌 수 없음)"""
         try:
-            self.streaming = not self.streaming  # 토글
-            
-            # 버튼 텍스트 업데이트
-            sender = self.sender()
-            if sender:
-                if self.streaming:
-                    sender.setText("영상 스트리밍 중지")
-                else:
-                    sender.setText("영상 스트리밍 시작")
-                    self.live_feed_label.setText("스트리밍 대기 중...")
+            if not self.streaming:  # 아직 스트리밍이 시작되지 않은 경우에만
+                self.streaming = True
+                
+                # 버튼 상태 업데이트
+                sender = self.sender()
+                if sender:
+                    sender.setText("영상 스트리밍 중")
+                    sender.setEnabled(False)  # 버튼 비활성화
+                    
+                if DEBUG:
+                    print("영상 스트리밍 시작됨")
             
         except Exception as e:
             if DEBUG:
-                print(f"스트리밍 제어 실패: {e}")
-            self.connection_error.emit("스트리밍 제어 실패")
+                print(f"스트리밍 시작 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
+            self.connection_error.emit("스트리밍 시작 실패")
 
     def update_camera_feed(self, image_data: bytes):
         """서버에서 받은 카메라 피드를 업데이트"""
