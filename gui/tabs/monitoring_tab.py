@@ -30,12 +30,12 @@ class MonitoringTab(QWidget):
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
-        'BASE': QPoint(220, 400),    # 기지 위치
-        'A': QPoint(150, 180),         # A 구역 위치
-        'B': QPoint(290, 180),        # B 구역 위치
-        'BASE_A_MID': QPoint(185, 290),  # BASE-A 중간지점
-        'BASE_B_MID': QPoint(255, 290),  # BASE-B 중간지점
-        'A_B_MID': QPoint(220, 180)       # A-B 중간지점
+        'BASE': QPoint(250, 340),    # 기지 위치
+        'A': QPoint(180, 120),         # A 구역 위치
+        'B': QPoint(320, 120),        # B 구역 위치
+        'BASE_A_MID': QPoint(215, 230),  # BASE-A 중간지점
+        'BASE_B_MID': QPoint(285, 230),  # BASE-B 중간지점
+        'A_B_MID': QPoint(250, 120)       # A-B 중간지점
     }
     
     # 각 경로별 중간지점 매핑
