@@ -298,7 +298,8 @@ class MonitoringTab(QWidget):
             self.robot_command.emit("MOVE_TO_A")
             self.animate_robot_movement('A')
             if DEBUG:
-                print("A 지역 이동 명령 전송 완료")print(f"A 지역 이동 명령 전송")
+                print("A 지역 이동 명령 전송 완료")
+                print(f"A 지역 이동 명령 전송")
 
     def send_move_to_b_command(self):
         """B 지역으로 이동 명령을 전송"""
