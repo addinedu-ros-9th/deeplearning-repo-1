@@ -56,7 +56,7 @@ class DataReceiverThread(QThread):
         """메인 수신 루프"""
         if DEBUG:
             print(f"{DEBUG_TAG['INIT']} 데이터 수신 스레드 시작")
-            print(f"{DEBUG_TAG['CONN']} 서버 연결 시도: {SERVER_IP}:{GUI_MERGER_PORT}")
+            print(f"{DEBUG_TAG['CONN']} GUI MERGER 서버 연결 시도: {SERVER_IP}:{GUI_MERGER_PORT}")
 
         # 소켓 생성 및 연결
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -136,8 +136,6 @@ class DataReceiverThread(QThread):
                     return None
                 data += chunk
                 remaining -= len(chunk)
-                if DEBUG and size > 8192:
-                    print(f"  - 수신 진행: {((size-remaining)/size*100):.1f}%")
             return data
         except Exception as e:
             if DEBUG:
@@ -289,18 +287,26 @@ class MainWindow(QMainWindow):
                 delattr(self, 'command_socket')
 
     def control_stream(self, start: bool):
-        """스트리밍 제어"""
-        if start:
-            self.send_robot_command('START_STREAM')
-            if DEBUG:
-                print(f"{DEBUG_TAG['SEND']} 스트리밍 시작 요청")
+        """스트리밍 표시 제어 (영상 수신은 계속됨)"""
+        pass  # 실제 스트리밍은 항상 수신, 표시만 제어
 
     def handle_detection(self, json_data: dict, image_data: bytes):
         """탐지 데이터 처리"""
         try:
             if DEBUG:
                 print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신:")
+                print(f"  [헤더 정보]")
                 print(f"  - Frame ID: {json_data.get('frame_id')}")
+                print(f"  - 로봇 위치: {json_data.get('location', 'unknown')}")
+                print(f"  - 로봇 상태: {json_data.get('robot_status', 'unknown')}")
+                
+                # 탐지 결과가 있는 경우만 출력
+                detections = json_data.get('detections', [])
+                if detections:
+                    print("  [탐지 정보]")
+                    for det in detections:
+                        print(f"  - 탐지된 종류: {det.get('label', 'unknown')}")
+                        print(f"    상황 종류: {det.get('case', 'unknown')}")
 
             # 이미지 업데이트
             if image_data:
