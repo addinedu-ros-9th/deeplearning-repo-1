@@ -138,7 +138,16 @@ class DataMerger(threading.Thread):
         while self.running:
             processed_ids = set() # 이번 사이클에서 처리(병합 또는 삭제)된 ID 집합
             with self.buffer_lock:
-                # 1. 이벤트와 이미지가 모두 있는 '완전체' 데이터 병합
+                # ✨ 1. 현재 로봇 상태 가져오기
+                current_state = self.robot_status.get('state', 'idle')
+
+                # ✨ 2. 상태에 따라 버퍼 타임아웃 동적 설정
+                # 'patrolling' 상태에서는 AI 분석 결과를 기다리기 위해 1초 대기
+                # 그 외 상태에서는 즉각적인 반응을 위해 매우 짧게(0.1초) 대기
+                timeout_seconds = 1.0 if current_state == 'patrolling' else 0.1
+                timeout = timedelta(seconds=timeout_seconds)
+                
+                # 3. '완전체' 데이터 병합 (기존 로직과 동일)
                 common_ids = self.image_buffer.keys() & self.event_buffer.keys()
                 for frame_id in common_ids:
                     jpeg_binary, _, _ = self.image_buffer[frame_id]
@@ -146,26 +155,28 @@ class DataMerger(threading.Thread):
                     self._queue_merged_for_gui(event_data, jpeg_binary)
                     processed_ids.add(frame_id)
 
-                # 2. 너무 오래된 데이터 정리 (오래된 '이미지만 있는' 데이터 포함)
-                timeout = timedelta(seconds=2) # 2초 이상 버퍼에 머무르면 정리
+                # 4. 타임아웃된 데이터 정리 (✨ 수정된 타임아웃 값 사용)
                 now = datetime.now()
-
-                # 2-1. 오래된 '이미지' 정리 (이벤트 없이 이미지만 있는 경우 GUI로 전송)
+                
+                # 4-1. 오래된 '이미지' 정리
                 old_image_ids = {fid for fid, (_, _, recv_time) in self.image_buffer.items() if now - recv_time > timeout}
                 for frame_id in old_image_ids:
-                    if frame_id in processed_ids: continue # 이미 병합되었으면 건너뜀
+                    if frame_id in processed_ids: continue
                     jpeg_binary, timestamp, _ = self.image_buffer[frame_id]
                     self._queue_image_only_for_gui(frame_id, timestamp, jpeg_binary)
                     processed_ids.add(frame_id)
 
-                # 2-2. 오래된 '이벤트' 정리 (짝 맞는 이미지가 오지 않은 경우 그냥 삭제)
-                old_event_ids = {fid for fid, (_, recv_time) in self.event_buffer.items() if now - recv_time > timeout}
+                # 4-2. 오래된 '이벤트' 정리 (AI 결과는 이미지가 없으면 그냥 버림)
+                # 'patrolling'이 아닌데도 이벤트가 들어오는 예외적인 경우를 대비해 더 긴 타임아웃(2초)으로 이벤트는 정리
+                event_cleanup_timeout = timedelta(seconds=2.0)
+                old_event_ids = {fid for fid, (_, recv_time) in self.event_buffer.items() if now - recv_time > event_cleanup_timeout}
                 processed_ids.update(old_event_ids)
 
-                # 3. 처리된 ID들을 버퍼에서 최종 삭제
+                # 5. 처리된 ID들을 버퍼에서 최종 삭제 (기존 로직과 동일)
                 for frame_id in processed_ids:
                     self.image_buffer.pop(frame_id, None)
                     self.event_buffer.pop(frame_id, None)
+            
             time.sleep(0.05) # 50ms 마다 병합/정리 로직 실행
 
     def _gui_send_thread(self):
@@ -180,7 +191,7 @@ class DataMerger(threading.Thread):
                 # --- 최종 전송 패킷 생성 (인터페이스 명세서 기반) ---
                 json_part = json.dumps(json_data).encode('utf-8')
                 # 명세서: JSON + b'|' + Binary + b'\n'
-                payload = json_part + b'|' + image_binary_with_drawings + b'\n' #[cite: 13, 14]
+                payload = json_part + b'|' + image_binary_with_drawings + b'\n'
                 header = struct.pack('>I', len(payload))
 
                 # --- 데이터 전송 ---
@@ -215,7 +226,7 @@ class DataMerger(threading.Thread):
             "timestamp": event_data.get('timestamp'),
             "detections": event_data.get('detections', []), # AI 분석 결과 포함
             "robot_status": self.robot_status.get('state', 'idle'),
-            "location": self.robot_status.get('current_location', 'N/A')
+            "location": self.robot_status.get('current_location', 'BASE')
         }
         self.gui_send_queue.put((merged_json, image_with_drawings))
 
@@ -232,7 +243,7 @@ class DataMerger(threading.Thread):
             "timestamp": timestamp,
             "detections": [],
             "robot_status": current_state,
-            "location": self.robot_status.get('current_location', 'N/A')
+            "location": self.robot_status.get('current_location', 'BASE')
         }
         # ImageOnly 데이터는 별도로 그림을 그릴 필요 없음
         self.gui_send_queue.put((image_only_json, jpeg_binary))
@@ -251,8 +262,8 @@ class DataMerger(threading.Thread):
                 label = det.get('label', 'unknown')
                 confidence = det.get('confidence', 0.0)
                 text = f"{label}: {confidence:.2f}"
-                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
 
             _, encoded_image = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
             return encoded_image.tobytes()
