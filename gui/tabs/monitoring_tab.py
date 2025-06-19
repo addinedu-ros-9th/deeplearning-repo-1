@@ -18,7 +18,7 @@ from PyQt5.uic import loadUi
 DEBUG = True
 
 # UI 파일 경로
-MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab2.ui')
+MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab3.ui')
 MONITORING_TAP_MAP_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'neighbot_map6.jpg')
 
 # MonitoringTab: Main Monitoring 탭의 UI 로드만 담당
@@ -30,12 +30,12 @@ class MonitoringTab(QWidget):
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
-        'BASE': QPoint(220, 370),    # 기지 위치
-        'A': QPoint(150, 150),         # A 구역 위치
-        'B': QPoint(290, 150),        # B 구역 위치
-        'BASE_A_MID': QPoint(185, 260),  # BASE-A 중간지점
-        'BASE_B_MID': QPoint(255, 260),  # BASE-B 중간지점
-        'A_B_MID': QPoint(220, 150)       # A-B 중간지점
+        'BASE': QPoint(220, 400),    # 기지 위치
+        'A': QPoint(150, 180),         # A 구역 위치
+        'B': QPoint(290, 180),        # B 구역 위치
+        'BASE_A_MID': QPoint(185, 290),  # BASE-A 중간지점
+        'BASE_B_MID': QPoint(255, 290),  # BASE-B 중간지점
+        'A_B_MID': QPoint(220, 180)       # A-B 중간지점
     }
     
     # 각 경로별 중간지점 매핑
@@ -77,19 +77,19 @@ class MonitoringTab(QWidget):
                 print("MonitoringTab UI 로드 완료")
                 
             # 이동 명령 버튼 시그널 연결
-            self.btn_move_to_A = self.findChild(QPushButton, "btn_move_to_A")
-            self.btn_move_to_B = self.findChild(QPushButton, "btn_move_to_B")
-            self.btn_return_home = self.findChild(QPushButton, "btn_return_to_home")
+            self.btn_move_to_a = self.findChild(QPushButton, "btn_move_to_a")
+            self.btn_move_to_b = self.findChild(QPushButton, "btn_move_to_b")
+            self.btn_return_base = self.findChild(QPushButton, "btn_return_to_base")
             self.btn_start_video_stream = self.findChild(QPushButton, "btn_start_video_stream")
 
             # 이동 버튼들 초기 비활성화
-            self.btn_move_to_A.setEnabled(False)
-            self.btn_move_to_B.setEnabled(False)
-            self.btn_return_home.setEnabled(False)
+            self.btn_move_to_a.setEnabled(False)
+            self.btn_move_to_b.setEnabled(False)
+            self.btn_return_base.setEnabled(False)
 
-            self.btn_move_to_A.clicked.connect(self.send_move_to_a_command)
-            self.btn_move_to_B.clicked.connect(self.send_move_to_b_command)
-            self.btn_return_home.clicked.connect(self.send_return_to_base_command)
+            self.btn_move_to_a.clicked.connect(self.send_move_to_a_command)
+            self.btn_move_to_b.clicked.connect(self.send_move_to_b_command)
+            self.btn_return_base.clicked.connect(self.send_return_to_base_command)
             self.btn_start_video_stream.clicked.connect(self.start_stream)
 
             # 응답 명령 버튼 찾기 및 시그널 연결
@@ -267,16 +267,29 @@ class MonitoringTab(QWidget):
 
     def disable_movement_buttons(self):
         """이동 버튼 비활성화"""
-        self.btn_move_to_A.setEnabled(False)
-        self.btn_move_to_B.setEnabled(False)
-        self.btn_return_home.setEnabled(False)
+        self.btn_move_to_a.setEnabled(False)
+        self.btn_move_to_b.setEnabled(False)
+        self.btn_return_base.setEnabled(False)
 
     def enable_movement_buttons(self):
-        """현재 위치에 따라 이동 버튼 활성화"""
-        # 현재 위치가 아닌 버튼만 활성화
-        self.btn_move_to_A.setEnabled(self.current_location != 'A')
-        self.btn_move_to_B.setEnabled(self.current_location != 'B')
-        self.btn_return_home.setEnabled(self.current_location != 'BASE')
+        """현재 위치에 따라 이동 버튼 활성화
+        - BASE 위치: A, B 버튼만 활성화
+        - A 위치: B, BASE 버튼만 활성화
+        - B 위치: A, BASE 버튼만 활성화
+        """
+        if self.streaming:  # 스트리밍이 시작된 경우에만
+            if self.current_location == 'BASE':
+                self.btn_move_to_a.setEnabled(True)
+                self.btn_move_to_b.setEnabled(True)
+                self.btn_return_base.setEnabled(False)
+            elif self.current_location == 'A':
+                self.btn_move_to_a.setEnabled(False)
+                self.btn_move_to_b.setEnabled(True)
+                self.btn_return_base.setEnabled(True)
+            elif self.current_location == 'B':
+                self.btn_move_to_a.setEnabled(True)
+                self.btn_move_to_b.setEnabled(False)
+                self.btn_return_base.setEnabled(True)
 
     def update_robot_status(self, status: str):
         """로봇 상태 업데이트"""
