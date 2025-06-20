@@ -40,8 +40,9 @@ class DetectionManager:
                         length_prefix = struct.pack("!I", len(data))
                         sock.sendall(length_prefix + data + b'\n')
 
-                        print(f"[TCP 전송] all={response}")
-                        print(f"[TCP 전송] 데이터 길이={[len(data)]}, frame_id={response['frame_id']}, 객체={len(response['detections'])}건", flush=True)
+                        print(f"[📤TCP 전송] all={response}")
+                        # print(f"[TCP 전송] 데이터 길이={[len(data)]}, frame_id={response['frame_id']}, 객체={len(response['detections'])}건", flush=True)
+                        print(f"[📤TCP 전송] ai_server -> main_server: frame_id={response['frame_id']}, jsonbytes={[len(data)]}, 객체={len(response['detections'])}건")
 
             except Exception as e:
                 print("[TCP 오류] 연결 종료 또는 실패:", e)
@@ -59,6 +60,7 @@ class DetectionManager:
         while True:
             try:
                 data, _ = sock.recvfrom(65535)
+                print(f"-----------------------------------------------------------------------------")
                 print(f"[UDP 수신] 총 데이터 길이: {len(data)} bytes", flush=True)
                 json_end = data.find(b'}') + 1
                 if json_end == 0:
@@ -93,10 +95,11 @@ class DetectionManager:
                 # 예측 결과를 TCP 큐에 추가
                 self.send_queue.put(response)
 
-                print(f"[UDP 수신] frame_id={frame_id}, 객체={len(response['detections'])}건", flush=True)
+                print(f"[✅UDP 수신] 1. Robot → ImageManager: frame_id={frame_id}, timestamp={timestamp}")
+                # print(f"[UDP 수신] frame_id={frame_id}, 객체={len(response['detections'])}건", flush=True)
 
             except Exception as e:
-                print("[UDP 처리 오류]", e)
+                print("[⚠️UDP 처리 오류]", e)
 
     def start(self):
         """UDP 수신 + TCP 송신 스레드 시작"""
@@ -114,4 +117,3 @@ if __name__ == "__main__":
         udp_port=UDP_PORT
     )
     manager.start()
-
