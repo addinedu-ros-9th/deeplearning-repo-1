@@ -88,6 +88,9 @@ class EventAnalyzer(threading.Thread):
                     if not packet: break
                     data += packet
                 
+                trailing_data = conn.recv(1) 
+
+
                 result_json_str = data.decode('utf-8')
                 result_json_for_print = json.loads(result_json_str)
                 print(f"[✅ TCP 수신] 3. AI_Server -> EventAnalyzer : frame_id {result_json_for_print.get('frame_id')}, dets {len(result_json_for_print.get('detections',[]))}건")
