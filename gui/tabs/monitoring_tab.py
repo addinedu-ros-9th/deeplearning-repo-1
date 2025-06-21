@@ -118,6 +118,9 @@ class MonitoringTab(QWidget):
             self.btn_danger_warning.clicked.connect(lambda: self.robot_command.emit("DANGER_WARNING"))
             self.btn_emergency_warning.clicked.connect(lambda: self.robot_command.emit("EMERGENCY_WARNING"))
             self.btn_case_closed.clicked.connect(lambda: self.robot_command.emit("CASE_CLOSED"))
+            
+            # 초기에 응답 버튼 비활성화 (탐지 팝업에서 "진행"을 선택해야 활성화됨)
+            self.set_response_buttons_enabled(False)
 
             # 상태 표시 라벨 찾기
             self.live_feed_label = self.findChild(QLabel, "live_feed_label")  # 스트리밍 영상 표시
@@ -729,4 +732,28 @@ class MonitoringTab(QWidget):
                 print(f"위치 파싱: '{location_str}' -> 현재 위치: {actual_location}")
                 
         return actual_location, is_moving, destination
+
+    def set_response_buttons_enabled(self, enabled=False):
+        """탐지 응답 명령 버튼들의 활성화 상태 설정
+        
+        Args:
+            enabled (bool): True면 활성화, False면 비활성화
+        """
+        try:
+            # 모든 응답 버튼에 상태 적용
+            self.btn_fire_report.setEnabled(enabled)
+            self.btn_police_report.setEnabled(enabled)
+            self.btn_illegal_warning.setEnabled(enabled)
+            self.btn_danger_warning.setEnabled(enabled)
+            self.btn_emergency_warning.setEnabled(enabled)
+            self.btn_case_closed.setEnabled(enabled)
+            
+            if DEBUG:
+                print(f"응답 버튼 상태 변경: {'활성화' if enabled else '비활성화'}")
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"응답 버튼 상태 변경 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
 

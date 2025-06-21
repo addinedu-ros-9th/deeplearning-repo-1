@@ -9,6 +9,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.uic import loadUi
 from gui.tabs.monitoring_tab import MonitoringTab
 from shared.protocols import CMD_MAP
+from gui.src.detection_dialog import DetectionDialog
 
 # 디버그 모드
 DEBUG = True
@@ -341,6 +342,20 @@ class MainWindow(QMainWindow):
             # 개별 라벨에 각각 정보 업데이트
             self.monitoring_tab.update_status("robot_location", location)
             self.monitoring_tab.update_status("robot_status", status)
+            
+            # robot_status가 "detected"이고 탐지 결과가 있으면 팝업창 표시
+            if status == "detected" and json_data.get('detections'):
+                # 첫 번째 탐지 정보로 팝업 생성
+                detection = json_data['detections'][0]
+                
+                # 팝업 다이얼로그 생성 및 표시
+                dialog = DetectionDialog(self, detection, image_data)
+                dialog.response_signal.connect(self.handle_detection_response)
+                dialog.setWindowModality(Qt.ApplicationModal)  # 다이얼로그가 닫힐 때까지 다른 창 조작 불가
+                dialog.show()
+                
+                # 다이얼로그가 표시될 때 응답 명령 버튼들 비활성화 (기본 상태)
+                self.monitoring_tab.set_response_buttons_enabled(False)
 
             # 탐지 결과 업데이트
             detections = json_data.get('detections', [])
@@ -374,6 +389,21 @@ class MainWindow(QMainWindow):
         except Exception as e:
             if DEBUG:
                 print(f"{DEBUG_TAG['ERR']} 상태 업데이트 실패: {e}")
+
+    def handle_detection_response(self, response):
+        """탐지 다이얼로그의 사용자 응답을 처리"""
+        if DEBUG:
+            print(f"{DEBUG_TAG['DET']} 사용자 응답: {response}")
+        
+        # 응답이 "PROCEED"(진행)인 경우 응답 명령 버튼들 활성화
+        if response == "PROCEED":
+            self.monitoring_tab.set_response_buttons_enabled(True)
+            # "진행" 명령 전송
+            self.send_robot_command("PROCEED")
+        else:  # "IGNORE"(무시)인 경우
+            self.monitoring_tab.set_response_buttons_enabled(False)
+            # "무시" 명령 전송
+            self.send_robot_command("IGNORE")
 
     def closeEvent(self, event):
         """윈도우 종료 처리"""
