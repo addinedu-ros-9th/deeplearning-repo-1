@@ -1,0 +1,82 @@
+# yolo_pose_detector.py
+from ultralytics import YOLO
+import numpy as np
+import cv2
+
+class YOLOPoseDetector:
+    def __init__(self, model_path="best_pose.pt"):
+        self.model = YOLO(model_path)
+        self.names = self.model.names  # 클래스 이름 저장
+
+        self.box_model = YOLO("best_cigar.pt")  # box 탐지용 모델
+        self.box_names = self.box_model.names
+        # self.conf = 0.5
+
+        print(f"[YOLOPoseDetector] 모델 로드 완료: {model_path}")
+
+    def predict_raw(self, frame_id, timestamp, jpeg_bytes, conf_thresh=0.5):
+        try:
+            """
+            이미지에서 사람을 탐지하고, 바운딩 박스와 라벨을 반환합니다.
+            반환 형식: [{'label': 'person', 'bbox': [x1, y1, x2, y2]}]
+            """
+            # JPEG → 이미지
+            nparr = np.frombuffer(jpeg_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            results = self.model.predict(frame, conf=self.conf, verbose=False)
+            detections = []
+
+            if len(results) == 0:
+                return detections
+
+
+            # 박스 감지 결과 추가
+            box_results = self.box_model.predict(frame, conf=self.conf, verbose=False)
+            if len(box_results) > 0:
+                for r in box_results:
+                    for box in r.boxes:
+                        conf = float(box.conf[0].item())
+                        if conf < conf_thresh:
+                            continue  # 필터링
+
+                        cls_id = int(box.cls[0].item())
+                        label = self.box_names[cls_id]
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        detections.append({
+                            'label': label,
+                            'box': [x1, y1, x2, y2],
+                            'confidence': conf
+                        })
+
+            # 포즈
+            for r in results:
+                boxes = r.boxes
+                for i in range(len(boxes)):
+                    conf = float(box.conf[0].item())
+                    if conf < conf_thresh:
+                            continue  # 필터링
+                    
+                    box = boxes[i]
+                    cls_id = int(box.cls[0].item())
+                    label = self.names[cls_id]  # 예: 'fall', 'stand', 'sit'
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+
+                    detections.append({
+                        'label': label,  # YOLO pose는 기본적으로 사람만 탐지
+                        'box': [x1, y1, x2, y2],
+                        'confidence': conf
+                    })
+
+            return {
+                    "frame_id": frame_id,
+                    "timestamp": timestamp,
+                    "detections": detections
+                }
+    
+        except Exception as e:
+            # print("[YOLODetector] 예측 오류:", e)
+            return {
+                "frame_id": frame_id,
+                "timestamp": timestamp,
+                "detections": []
+            }

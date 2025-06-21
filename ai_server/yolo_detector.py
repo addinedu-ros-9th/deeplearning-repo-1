@@ -3,13 +3,60 @@ import json
 import cv2
 import numpy as np
 from ultralytics import YOLO
+# ✅ PyTorch 2.6 보안 우회 등록
+from torch.nn import ConvTranspose2d
+from torch.serialization import add_safe_globals
+from ultralytics.nn.tasks import DetectionModel, SegmentationModel
+from ultralytics.nn.modules.conv import Conv, Concat
+from ultralytics.nn.modules.block import C2f, C3, C3x
+from ultralytics.nn.modules.head import Detect, Classify, Segment
+# from ultralytics.nn.modules.conv import SPPF
+from torch.nn import Sequential, Conv2d  # ← Conv2d 추가
+from torch.nn import BatchNorm2d
+from torch.nn import SiLU 
+from torch.nn import ModuleList
+from ultralytics.nn.modules.block import Bottleneck 
+from ultralytics.nn.modules.block import SPPF  # ✅ 정확한 경로
+from torch.nn import MaxPool2d
+from torch.nn import Upsample
+from ultralytics.nn.modules.block import DFL
+from ultralytics.nn.modules.block import Proto
+
+
+add_safe_globals({
+    DFL: DFL, 
+    DetectionModel: DetectionModel,
+    SegmentationModel: SegmentationModel,
+    Conv: Conv,
+    C2f: C2f,
+    C3: C3,
+    C3x: C3x,
+    Detect: Detect,
+    Classify: Classify,
+    Segment: Segment,
+    Concat: Concat,
+    SPPF: SPPF,
+    Sequential: Sequential,
+    Conv2d: Conv2d , # ✅ NEW!
+    BatchNorm2d: BatchNorm2d,
+    SiLU: SiLU,
+    ModuleList: ModuleList,
+    Bottleneck: Bottleneck,
+    MaxPool2d: MaxPool2d,
+    Upsample: Upsample,
+    Proto: Proto,
+    ConvTranspose2d: ConvTranspose2d,
+})
+
+
 
 class YOLODetector:
+    # def __init__(self, model_path='yolov8n-seg.pt'):
     def __init__(self, model_path='best_gun_knife.pt'):
         self.model = YOLO(model_path)
         print("[YOLODetector] 모델 로드 완료")
 
-    def predict_raw(self, frame_id, timestamp, jpeg_bytes):
+    def predict_raw(self, frame_id, timestamp, jpeg_bytes, conf_thresh=0.5):
         try:
             # JPEG → 이미지
             nparr = np.frombuffer(jpeg_bytes, np.uint8)
@@ -17,12 +64,19 @@ class YOLODetector:
 
             result = self.model(frame, verbose=False)[0]
             # result = self.model.predict(source=frame, verbose=False)[0]
+            # print(f"[디버그] 모델 예측 결과 result: {result}")
+            # print(f"[디버그] result.boxes: {result.boxes}")
+
+
 
             detections = []
             for box in result.boxes:
+                conf = round(float(box.conf[0]), 2)
+                if conf < conf_thresh:
+                    continue  # 일정 conf 미만은 제외
+                
                 cls_id = int(box.cls[0])
                 label = self.model.names[cls_id]
-                conf = round(float(box.conf[0]), 2)
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
 
                 detections.append({
@@ -37,7 +91,7 @@ class YOLODetector:
                 "detections": detections
             }
         except Exception as e:
-            print("[YOLODetector] 예측 오류:", e)
+            # print("[YOLODetector] 예측 오류:", e)
             return {
                 "frame_id": frame_id,
                 "timestamp": timestamp,
