@@ -296,8 +296,14 @@ class MainWindow(QMainWindow):
                 delattr(self, 'command_socket')
 
     def control_stream(self, start: bool):
-        """스트리밍 표시 제어 (영상 수신은 계속됨)"""
-        pass  # 실제 스트리밍은 항상 수신, 표시만 제어
+        """스트리밍 시스템 활성화 여부 제어
+        첫 시작 시에만 사용되며, 이후로는 영상 수신은 계속됨
+        """
+        if DEBUG:
+            print(f"{DEBUG_TAG['IMG']} 시스템 초기 활성화: {start}")
+            
+        # 첫 시작 시 시스템 활성화를 위한 코드를 추가할 수 있음 (필요한 경우)
+        # 현재는 구현 필요 없음 - 항상 백그라운드에서 수신 중
 
     def handle_detection(self, json_data: dict, image_data: bytes):
         """탐지 데이터 처리"""
@@ -321,13 +327,13 @@ class MainWindow(QMainWindow):
             if image_data:
                 self.monitoring_tab.update_camera_feed(image_data)
 
-            # 상태 및 위치 업데이트
+            # 상태 및 위치 업데이트 (각 라벨에 맞게 분리)
             status = json_data.get('robot_status', 'unknown')
             location = json_data.get('location', 'unknown')
-            self.monitoring_tab.update_status(
-                "system", 
-                f"위치: {location}, 상태: {status}"
-            )
+            
+            # 개별 라벨에 각각 정보 업데이트
+            self.monitoring_tab.update_status("robot_location", location)
+            self.monitoring_tab.update_status("robot_status", status)
 
             # 탐지 결과 업데이트
             detections = json_data.get('detections', [])

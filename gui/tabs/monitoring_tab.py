@@ -18,7 +18,7 @@ from PyQt5.uic import loadUi
 DEBUG = True
 
 # UI 파일 경로
-MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab4.ui')
+MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab5.ui')
 MONITORING_TAP_MAP_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'neighbot_map6.jpg')
 
 # MonitoringTab: Main Monitoring 탭의 UI 로드만 담당
@@ -56,10 +56,11 @@ class MonitoringTab(QWidget):
         self.is_moving = False            # 이동 중 여부
         self.waiting_server_confirm = False # 서버 확인 대기 중 여부
         self.user_name = user_name or "사용자"  # 사용자 이름 (기본값 설정)
+        self.system_ready = False          # 시스템 준비 상태 (첫 스트리밍 시작 후 True)
+        self.streaming = False             # 스트리밍 표시 여부 (화면에 보여주는지)
         self.init_ui()
         self.init_map()
         self.init_robot()
-        self.streaming = False
         
         # 상태별 메시지 정의
         self.STATUS_MESSAGES = {
@@ -122,21 +123,27 @@ class MonitoringTab(QWidget):
             self.live_feed_label = self.findChild(QLabel, "live_feed_label")  # 스트리밍 영상 표시
             self.detection_image = self.findChild(QLabel, "detection_image")   # 맵 이미지 표시
             self.connectivity_label = self.findChild(QLabel, "connectivity_label")
-            self.system_status_label = self.findChild(QLabel, "robot_status")
+            self.robot_status_label = self.findChild(QLabel, "robot_status")
+            self.robot_location_label = self.findChild(QLabel, "robot_location")
             self.detections_label = self.findChild(QLabel, "detections")
             
-            # 상태 라벨 초기화
-            self.connectivity_label.setText("연결 대기 중...")
-            self.system_status_label.setText("스트리밍 비활성화 - 시작 버튼을 눌러주세요")
-            self.detections_label.setText("스트리밍을 시작하면 탐지 결과가 표시됩니다")
-            self.live_feed_label.setText("스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+            # 상태 라벨 초기화 (접두사 추가)
+            self.connectivity_label.setText("연결 상태: 연결 대기 중...")
+            self.robot_status_label.setText("로봇 상태: 비활성화 - 시작 버튼을 눌러주세요")
+            self.robot_location_label.setText("로봇 위치: 대기 중")
+            self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
+            self.live_feed_label.setText("비디오 상태: 시스템 비활성화 - 시작 버튼을 눌러주세요")
+            
+            # 스트리밍 버튼 초기 텍스트 설정
+            self.btn_start_video_stream.setText("Start Video Stream")
             
             if DEBUG:
                 print("UI 요소 초기화 완료:")
                 print(f"  - live_feed_label: {self.live_feed_label is not None}")
                 print(f"  - detection_image: {self.detection_image is not None}")
                 print(f"  - connectivity_label: {self.connectivity_label is not None}")
-                print(f"  - system_status_label: {self.system_status_label is not None}")
+                print(f"  - robot_status_label: {self.robot_status_label is not None}")
+                print(f"  - robot_location_label: {self.robot_location_label is not None}")
                 print(f"  - detections_label: {self.detections_label is not None}")
             
         except Exception as e:
@@ -313,7 +320,7 @@ class MonitoringTab(QWidget):
             print(f"로봇 이동 완료: 위치={self.current_location}")
         
         # UI 갱신
-        if self.streaming:
+        if self.system_ready:
             self.enable_movement_buttons()
             
         # 추가 이벤트가 필요하면 여기에 추가
@@ -330,7 +337,7 @@ class MonitoringTab(QWidget):
         - A 위치: B, BASE 버튼만 활성화
         - B 위치: A, BASE 버튼만 활성화
         """
-        if self.streaming:  # 스트리밍이 시작된 경우에만
+        if self.system_ready:  # 시스템이 활성화된 경우에만 (스트리밍 표시 여부와 무관)
             if self.current_location == 'BASE':
                 self.btn_move_to_a.setEnabled(True)
                 self.btn_move_to_b.setEnabled(True)
@@ -367,7 +374,7 @@ class MonitoringTab(QWidget):
                     print("로봇 이동 중: 모든 이동 버튼 비활성화")
             elif status == 'patrolling' or status == 'idle':
                 # 순찰 중이거나 대기 중일 때는 현재 위치에 따라 버튼 활성화
-                if self.streaming:  # 스트리밍 중인 경우에만 버튼 활성화
+                if self.system_ready:  # 시스템이 활성화된 경우에만 버튼 활성화 (스트리밍 표시 여부와 무관)
                     self.enable_movement_buttons()
                     if DEBUG:
                         print(f"로봇 {status}: 이동 버튼 활성화 (현재 위치: {self.current_location})")
@@ -406,36 +413,56 @@ class MonitoringTab(QWidget):
                 print(f"기지 복귀 명령 전송")
 
     def start_stream(self):
-        """영상 스트리밍을 시작합니다 (한 번 시작하면 끌 수 없음)"""
+        """영상 스트리밍을 토글합니다 (시스템은 계속 가동)"""
         try:
-            if not self.streaming:
+            # 시스템 초기 활성화 (최초 1회)
+            if not self.system_ready:
+                self.system_ready = True
                 self.streaming = True
-                self.stream_command.emit(True)
-                self.btn_start_video_stream.setEnabled(False)
+                self.stream_command.emit(True)  # 시스템 활성화 신호 전송
+                self.btn_start_video_stream.setText("Stop Video Stream")
                 
-                # 영상 피드 초기화
-                self.live_feed_label.setText("스트리밍 시작 중...")
+                # 영상 피드 초기화 (접두사 추가)
+                self.live_feed_label.setText("비디오 상태: 스트리밍 시작 중...")
                 
-                # 현재 위치에 따라 이동 버튼 활성화
+                # 현재 위치에 따라 이동 버튼 활성화 (최초 1회만)
                 self.enable_movement_buttons()
                 
                 if DEBUG:
-                    print("스트리밍 시작: 이동 버튼 활성화됨")
+                    print("시스템 및 스트리밍 최초 활성화: 이동 버튼 활성화됨")
+            
+            # 이미 시스템이 활성화된 상태에서는 영상 표시 토글만 수행
+            else:
+                # 스트리밍 토글
+                self.streaming = not self.streaming
+                
+                if self.streaming:
+                    # 영상 표시 활성화
+                    self.btn_start_video_stream.setText("Stop Video Stream")
+                    self.live_feed_label.setText("비디오 상태: 스트리밍 활성화됨")
+                    if DEBUG:
+                        print("비디오 스트림 표시 활성화")
+                else:
+                    # 영상 표시 비활성화 (백그라운드 수신은 계속)
+                    self.btn_start_video_stream.setText("Start Video Stream")
+                    self.live_feed_label.setText("비디오 상태: 스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+                    if DEBUG:
+                        print("비디오 스트림 표시 중지 (백그라운드에서는 계속 수신)")
             
         except Exception as e:
             if DEBUG:
-                print(f"스트리밍 시작 실패: {e}")
+                print(f"스트리밍 토글 실패: {e}")
                 import traceback
                 print(traceback.format_exc())
-            self.connection_error.emit("스트리밍 시작 실패")
+            self.connection_error.emit("스트리밍 토글 실패")
 
     def update_camera_feed(self, image_data: bytes):
-        """서버에서 받은 카메라 피드를 업데이트"""
+        """서버에서 받은 카메라 피드를 업데이트
+        카메라 스트림은 항상 백그라운드에서 수신하지만,
+        self.streaming이 True일 때만 화면에 표시합니다.
+        """
         try:
-            # 스트리밍이 활성화된 경우에만 화면에 표시
-            if not self.streaming:
-                return
-
+            # 영상 데이터 유효성 검사 (항상 수행)
             if not image_data:
                 if DEBUG:
                     print("이미지 데이터가 없습니다.")
@@ -444,6 +471,11 @@ class MonitoringTab(QWidget):
             if not self.live_feed_label:
                 if DEBUG:
                     print("live_feed_label이 초기화되지 않았습니다.")
+                return
+            
+            # 스트리밍 비활성화 상태일 때는 화면 표시하지 않음
+            if not self.streaming:
+                # 화면을 업데이트하지 않고 데이터만 처리 (백그라운드 수신)
                 return
 
             # 바이트 데이터로부터 QPixmap 생성
@@ -474,56 +506,105 @@ class MonitoringTab(QWidget):
         """상태 정보를 업데이트"""
         try:
             if status_type == "connectivity":
-                self.connectivity_label.setText(message)
-            elif status_type == "system":
-                # 스트리밍이 활성화되어 있지 않으면 스트리밍 비활성화 메시지 표시
-                if not self.streaming:
-                    self.system_status_label.setText("스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+                # 연결 상태 라벨에 접두사 추가
+                formatted_msg = f"연결 상태: {message}"
+                self.connectivity_label.setText(formatted_msg)
+            elif status_type == "robot_status":
+                # 로봇 상태만 업데이트
+                # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
+                if not self.system_ready:
+                    self.robot_status_label.setText("로봇 상태: 비활성화 - 시작 버튼을 눌러주세요")
                     return
                 
-                # 스트리밍이 활성화된 경우에만 시스템 상태 업데이트
-                self.system_status_label.setText(message)
-                
-                # 로봇 상태 정보 처리
-                if "상태:" in message:
-                    status = message.split("상태:")[1].strip()
-                    self.update_robot_status(status)
-                
-                # 위치 정보 처리
-                if "위치:" in message:
-                    location_raw = message.split("위치:")[1].split(",")[0].strip()
-                    actual_location, is_moving, destination = self.parse_location(location_raw)
-                    
-                    if actual_location:
-                        # 이동 중인 경우 중간 지점 이동 상태라고 설정
-                        if is_moving and destination:
-                            if not self.is_moving:
-                                # 이동 중으로 상태 변경
-                                self.is_moving = True
-                                self.target_location = destination
-                                if DEBUG:
-                                    print(f"이동 중 감지: {self.current_location} -> {destination}")
-                                # 이동 버튼 비활성화
-                                self.disable_movement_buttons()
-                        # 이동중이 아니고 실제 위치값(A, B, BASE)이 온 경우
-                        elif not is_moving:
-                            # 이동 중이었고, 서버에서 온 위치가 목적지와 같으면
-                            if self.is_moving and self.waiting_server_confirm and actual_location == self.target_location:
-                                if DEBUG:
-                                    print(f"목적지 도착 확인: {actual_location}, complete_movement_to_target 호출")
-                                # 최종 목적지로 이동 애니메이션 실행
-                                self.complete_movement_to_target()
-                            # 일반 위치 업데이트 (이동 중이 아닐 때)
-                            elif actual_location != self.current_location:
-                                self.current_location = actual_location
-                                if self.streaming:
-                                    self.enable_movement_buttons()
-            elif status_type == "detections":
-                # 스트리밍이 활성화되어 있지 않으면 메시지 표시하지 않음
+                # 시스템은 준비되었지만 스트리밍 화면이 비활성화된 경우
                 if not self.streaming:
-                    self.detections_label.setText("스트리밍을 시작하면 탐지 결과가 표시됩니다")
+                    self.robot_status_label.setText("로봇 상태: 스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+                    return
+                
+                # 로봇 상태 업데이트
+                formatted_msg = f"로봇 상태: {message}"
+                self.robot_status_label.setText(formatted_msg)
+                self.update_robot_status(message)
+                
+            elif status_type == "robot_location":
+                # 로봇 위치만 업데이트
+                # 시스템이 준비되지 않은 경우
+                if not self.system_ready:
+                    self.robot_location_label.setText("로봇 위치: 대기 중")
+                    return
+                
+                # 시스템은 준비되었지만 스트리밍 비활성화
+                if not self.streaming:
+                    self.robot_location_label.setText("로봇 위치: 대기 중")
+                    return
+                
+                # 로봇 위치 업데이트
+                formatted_msg = f"로봇 위치: {message}"
+                self.robot_location_label.setText(formatted_msg)
+                
+                # 위치 정보 처리 
+                actual_location, is_moving, destination = self.parse_location(message)
+                
+                if actual_location:
+                    # 이동 중인 경우 중간 지점 이동 상태라고 설정
+                    if is_moving and destination:
+                        if not self.is_moving:
+                            # 이동 중으로 상태 변경
+                            self.is_moving = True
+                            self.target_location = destination
+                            if DEBUG:
+                                print(f"이동 중 감지: {self.current_location} -> {destination}")
+                            # 이동 버튼 비활성화
+                            self.disable_movement_buttons()
+                    # 이동중이 아니고 실제 위치값(A, B, BASE)이 온 경우
+                    elif not is_moving:
+                        # 이동 중이었고, 서버에서 온 위치가 목적지와 같으면
+                        if self.is_moving and self.waiting_server_confirm and actual_location == self.target_location:
+                            if DEBUG:
+                                print(f"목적지 도착 확인: {actual_location}, complete_movement_to_target 호출")
+                            # 최종 목적지로 이동 애니메이션 실행
+                            self.complete_movement_to_target()
+                        # 일반 위치 업데이트 (이동 중이 아닐 때)
+                        elif actual_location != self.current_location:
+                            self.current_location = actual_location
+                            if self.system_ready:
+                                self.enable_movement_buttons()
+                                
+            elif status_type == "system":
+                # 기존 로직 유지 (하위 호환성)
+                # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
+                if not self.system_ready:
+                    self.update_status("robot_status", "비활성화 - 시작 버튼을 눌러주세요")
+                    self.update_status("robot_location", "대기 중")
+                    return
+                
+                # 시스템은 준비되었지만 스트리밍 화면이 비활성화된 경우
+                if not self.streaming:
+                    self.update_status("robot_status", "스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+                    self.update_status("robot_location", "대기 중")
+                    return
+                
+                # 메시지에서 상태와 위치 분리
+                if "상태:" in message and "위치:" in message:
+                    location_raw = message.split("위치:")[1].split(",")[0].strip()
+                    status = message.split("상태:")[1].strip()
+                    
+                    # 각 상태별 업데이트 메서드 호출
+                    self.update_status("robot_location", location_raw)
+                    self.update_status("robot_status", status)
+                    
+            elif status_type == "detections":
+                # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
+                if not self.system_ready:
+                    self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
+                # 스트리밍 화면이 비활성화된 경우
+                elif not self.streaming:
+                    self.detections_label.setText("탐지 상태: 스트리밍을 시작하면 탐지 결과가 표시됩니다")
+                # 정상 동작 (시스템 활성화 + 스트리밍 활성화)
                 else:
-                    self.detections_label.setText(message)
+                    # 탐지 메시지에 접두사 추가
+                    formatted_msg = f"탐지 상태:\n{message}"
+                    self.detections_label.setText(formatted_msg)
         except Exception as e:
             if DEBUG:
                 print(f"상태 업데이트 실패: {e}")
