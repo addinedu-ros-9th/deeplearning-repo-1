@@ -21,7 +21,7 @@ class DetectionDialog(QDialog):
     def init_ui(self):
         try:
             # UI 파일 로드
-            loadUi('./gui/ui/detection_dialog.ui', self)
+            loadUi('./gui/ui/detection_dialog2.ui', self)
             
             # 다이얼로그 제목 설정
             self.setWindowTitle(self.get_dialog_title())

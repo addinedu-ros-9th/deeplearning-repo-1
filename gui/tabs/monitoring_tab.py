@@ -507,6 +507,43 @@ class MonitoringTab(QWidget):
                 import traceback
                 print(traceback.format_exc())
                 
+    def update_detection_image(self, image_data: bytes):
+        """탐지 이미지를 업데이트
+        
+        Args:
+            image_data (bytes): 이미지 바이너리 데이터
+        """
+        try:
+            if not image_data:
+                if DEBUG:
+                    print("탐지 이미지 업데이트 실패: 이미지 데이터 없음")
+                return
+                
+            pixmap = QPixmap()
+            if pixmap.loadFromData(image_data):
+                # 이미지를 라벨 크기에 맞게 조정하되 원본 비율 유지
+                scaled_pixmap = pixmap.scaled(
+                    self.detection_image.width(), 
+                    self.detection_image.height(),
+                    Qt.KeepAspectRatio, 
+                    Qt.SmoothTransformation
+                )
+                self.detection_image.setPixmap(scaled_pixmap)
+                self.detection_image.setAlignment(Qt.AlignCenter)
+                
+                if DEBUG:
+                    print(f"탐지 이미지 업데이트 성공 (원본: {pixmap.width()}x{pixmap.height()}, " \
+                          f"조정: {scaled_pixmap.width()}x{scaled_pixmap.height()})")
+            else:
+                if DEBUG:
+                    print("탐지 이미지 로드 실패")
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"탐지 이미지 업데이트 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
+
     def update_status(self, status_type: str, message: str):
         """상태 정보를 업데이트"""
         try:
