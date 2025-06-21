@@ -23,7 +23,7 @@ class YOLOPoseDetector:
             # JPEG → 이미지
             nparr = np.frombuffer(jpeg_bytes, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            results = self.model.predict(frame, conf=self.conf, verbose=False)
+            results = self.model.predict(frame, conf=conf_thresh, verbose=False)
             detections = []
 
             if len(results) == 0:
@@ -31,7 +31,7 @@ class YOLOPoseDetector:
 
 
             # 박스 감지 결과 추가
-            box_results = self.box_model.predict(frame, conf=self.conf, verbose=False)
+            box_results = self.box_model.predict(frame, conf=conf_thresh, verbose=False)
             if len(box_results) > 0:
                 for r in box_results:
                     for box in r.boxes:
