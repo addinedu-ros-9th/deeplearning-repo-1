@@ -117,7 +117,9 @@ class MonitoringTab(QWidget):
             self.btn_illegal_warning.clicked.connect(lambda: self.robot_command.emit("ILLEGAL_WARNING"))
             self.btn_danger_warning.clicked.connect(lambda: self.robot_command.emit("DANGER_WARNING"))
             self.btn_emergency_warning.clicked.connect(lambda: self.robot_command.emit("EMERGENCY_WARNING"))
-            self.btn_case_closed.clicked.connect(lambda: self.robot_command.emit("CASE_CLOSED"))
+            
+            # CASE_CLOSED 버튼은 명령 전송 후 버튼 비활성화 처리
+            self.btn_case_closed.clicked.connect(self.handle_case_closed)
             
             # 초기에 응답 버튼 비활성화 (탐지 팝업에서 "진행"을 선택해야 활성화됨)
             self.set_response_buttons_enabled(False)
@@ -756,4 +758,15 @@ class MonitoringTab(QWidget):
                 print(f"응답 버튼 상태 변경 실패: {e}")
                 import traceback
                 print(traceback.format_exc())
+
+    def handle_case_closed(self):
+        """CASE_CLOSED 버튼 클릭 처리: 명령 전송 후 버튼 비활성화"""
+        # CASE_CLOSED 명령 전송
+        self.robot_command.emit("CASE_CLOSED")
+        
+        # 버튼 비활성화
+        self.set_response_buttons_enabled(False)
+        
+        if DEBUG:
+            print("사건 종료 처리: 명령 버튼 비활성화 완료")
 

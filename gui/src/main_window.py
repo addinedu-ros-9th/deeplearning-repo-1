@@ -256,8 +256,16 @@ class MainWindow(QMainWindow):
                 print(f"  - 패킷: {packet!r}")
                 print(f"  - 바이트: {' '.join(hex(b)[2:] for b in packet)}")
 
-            # 지역 이동 명령인 경우 로봇 커맨더로 전송
-            if command in ["MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE"]:
+            # 로봇 제어 명령들은 로봇 커맨더로 전송 
+            # (이동 명령 + 탐지 응답 관련 8가지 모두 포함)
+            important_commands = [
+                "MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE",  # 이동 명령
+                "PROCEED", "IGNORE",  # 팝업 응답
+                "FIRE_REPORT", "POLICE_REPORT", "ILLEGAL_WARNING",  # 사건 대응
+                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED"  # 사건 대응
+            ]
+            
+            if command in important_commands:
                 if not hasattr(self, 'commander_socket'):
                     if DEBUG:
                         print(f"{DEBUG_TAG['CONN']} 새 로봇 커맨더 소켓 생성")
@@ -266,10 +274,18 @@ class MainWindow(QMainWindow):
                 
                 # 로봇 커맨더로 전송
                 if DEBUG:
-                    print(f"{DEBUG_TAG['SEND']} 로봇 커맨더로 전송 (포트: {ROBOT_COMMANDER_PORT})")
+                    print(f"{DEBUG_TAG['SEND']} 명령 '{command}'을(를) 로봇 커맨더로 전송 (포트: {ROBOT_COMMANDER_PORT})")
                 self.commander_socket.sendall(packet)
                 
-            # 일반 명령은 기존 서버로 전송
+                # 특별 명령 로그
+                if command in ["PROCEED", "IGNORE"]:
+                    print(f"{DEBUG_TAG['SEND']} 팝업 응답 '{command}'을(를) 로봇 커맨더로 전송 완료")
+                elif command == "CASE_CLOSED":
+                    print(f"{DEBUG_TAG['SEND']} 사건 종료 명령을 로봇 커맨더로 전송 완료, 응답 버튼 비활성화 예정")
+                elif command in ["FIRE_REPORT", "POLICE_REPORT", "ILLEGAL_WARNING", "DANGER_WARNING", "EMERGENCY_WARNING"]:
+                    print(f"{DEBUG_TAG['SEND']} 사건 대응 명령 '{command}'을(를) 로봇 커맨더로 전송 완료")
+                
+            # 그 외 명령은 기존 서버로 전송 (ex: GET_LOGS)
             else:
                 if not hasattr(self, 'command_socket'):
                     if DEBUG:
@@ -278,6 +294,8 @@ class MainWindow(QMainWindow):
                     self.command_socket.connect((SERVER_IP, GUI_MERGER_PORT))
 
                 # 메인 서버로 전송
+                if DEBUG:
+                    print(f"{DEBUG_TAG['SEND']} 명령 '{command}'을(를) 메인 서버로 전송 (포트: {GUI_MERGER_PORT})")
                 self.command_socket.sendall(packet)
 
             if DEBUG:
@@ -289,7 +307,7 @@ class MainWindow(QMainWindow):
                 print(traceback.format_exc())
             
             # 소켓 재설정
-            if command in ["MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE"] and hasattr(self, 'commander_socket'):
+            if command in important_commands and hasattr(self, 'commander_socket'):
                 try:
                     self.commander_socket.close()
                 except:
