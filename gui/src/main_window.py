@@ -97,7 +97,8 @@ class DataReceiverThread(QThread):
                         self.detection_received.emit(json_data, image_data)
                         if DEBUG:
                             print(f"{DEBUG_TAG['RECV']} 메시지 처리 완료:")
-                            print(f"  - JSON 크기: {len(json_data)} 바이트")
+                            print(f"  - JSON 크기: {len(str(json_data))} 바이트")
+                            print(f"  - 이미지 크기: {len(image_data)} 바이트")
                             print(f"  - 이미지 크기: {len(image_data)} 바이트")
                     except Exception as e:
                         if DEBUG:
@@ -153,6 +154,11 @@ class DataReceiverThread(QThread):
 
             # JSON 파싱
             json_str = parts[0].decode('utf-8').strip()
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['RECV']} 수신된 JSON 문자열:")
+                print(f"  {json_str}")
+                
             json_data = json.loads(json_str)
 
             # 이미지 바이너리 (마지막 개행 제거)
@@ -322,6 +328,7 @@ class MainWindow(QMainWindow):
                     for det in detections:
                         print(f"  - 탐지된 종류: {det.get('label', 'unknown')}")
                         print(f"    상황 종류: {det.get('case', 'unknown')}")
+                        print(f"    전체 탐지 정보: {det}")
 
             # 이미지 업데이트
             if image_data:
@@ -338,8 +345,14 @@ class MainWindow(QMainWindow):
             # 탐지 결과 업데이트
             detections = json_data.get('detections', [])
             if detections:
+                # 디버깅용 - 각 탐지 결과의 키 확인
+                if DEBUG:
+                    print(f"  [탐지 결과 키 확인]")
+                    for i, det in enumerate(detections):
+                        print(f"  - 탐지 {i+1} 키: {list(det.keys())}")
+                
                 detection_text = "\n".join(
-                    f"- {det['label']} ({det['case']})" 
+                    f"- {det.get('label', 'unknown')} ({det.get('case', 'unknown')})" 
                     for det in detections
                 )
                 self.monitoring_tab.update_status("detections", detection_text)
