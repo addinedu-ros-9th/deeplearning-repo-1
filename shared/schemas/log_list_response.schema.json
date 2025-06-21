@@ -1,0 +1,125 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Log List Response",
+    "type": "object",
+    "properties": {
+        "cmd": {
+            "type": "string",
+            "const": "log_list_response",
+            "description": "응답 명령 타입 (고정값: log_list_response)"
+        },
+        "logs": {
+            "type": "array",
+            "description": "사건 로그 배열",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "case_id": {
+                        "type": "integer",
+                        "description": "사건 고유 ID"
+                    },
+                    "case_type": {
+                        "type": "string",
+                        "description": "사건 유형 (예: danger, emergency)"
+                    },
+                    "detection_type": {
+                        "type": "string",
+                        "description": "감지 타입 (예: knife, fire, etc)"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "감지 시각"
+                    },
+                    "robot_id": {
+                        "type": "string",
+                        "description": "감지한 로봇 ID"
+                    },
+                    "location_id": {
+                        "type": "string",
+                        "description": "장소 ID 또는 이름"
+                    },
+                    "user_id": {
+                        "type": [
+                            "integer",
+                            "string"
+                        ],
+                        "description": "조치한 사용자 ID (없을 경우 null)"
+                    },
+                    "image_path": {
+                        "type": "string",
+                        "description": "감지 이미지 경로"
+                    },
+                    "video_path": {
+                        "type": "string",
+                        "description": "감지 영상 경로"
+                    },
+                    "is_checked": {
+                        "type": "integer",
+                        "enum": [
+                            0,
+                            1
+                        ],
+                        "description": "확인 여부"
+                    },
+                    "is_warned": {
+                        "type": "integer",
+                        "enum": [
+                            0,
+                            1
+                        ],
+                        "description": "경고 여부"
+                    },
+                    "is_112_reported": {
+                        "type": "integer",
+                        "enum": [
+                            0,
+                            1
+                        ],
+                        "description": "112 신고 여부"
+                    },
+                    "is_119_reported": {
+                        "type": "integer",
+                        "enum": [
+                            0,
+                            1
+                        ],
+                        "description": "119 신고 여부"
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "사건 시작 시각"
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "사건 종료 시각"
+                    }
+                },
+                "required": [
+                    "case_id",
+                    "case_type",
+                    "detection_type",
+                    "timestamp",
+                    "robot_id",
+                    "location_id",
+                    "image_path",
+                    "video_path",
+                    "is_checked",
+                    "is_warned",
+                    "is_112_reported",
+                    "is_119_reported",
+                    "start_time",
+                    "end_time"
+                ],
+                "additionalProperties": false
+            }
+        }
+    },
+    "required": [
+        "cmd",
+        "logs"
+    ],
+    "additionalProperties": false
+}

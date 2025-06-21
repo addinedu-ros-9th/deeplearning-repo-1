@@ -2,155 +2,386 @@
 
 import json
 import socket
-from PyQt5.QtWidgets import QMainWindow, QTableWidgetItem
+import traceback
+from PyQt5.QtWidgets import QMainWindow
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.uic import loadUi
 from gui.tabs.monitoring_tab import MonitoringTab
+from shared.protocols import CMD_MAP
 
-# 디버그 토글: True일 때만 print 출력
+# 디버그 모드
 DEBUG = True
 
-# 서버 연결 설정
-# SERVER_IP = "192.168.0.23" # data_merger 서버 IP
-SERVER_IP = "127.0.0.1"      # local host
-SERVER_PORT = 9004           # data_merger 서버 포트
+# 디버그 태그
+DEBUG_TAG = {
+    'INIT': '[초기화]',
+    'CONN': '[연결]',
+    'RECV': '[수신]',
+    'SEND': '[전송]',
+    'DET': '[탐지]',
+    'IMG': '[이미지]',
+    'ERR': '[오류]'
+}
 
-class DataMergerReceiverThread(QThread):
-    # 디버그 태그 정의
-    DEBUG_TAG = {
-        'CONN': '[연결]',
-        'RECV': '[수신]',
-        'PARSE': '[파싱]',
-        'ERR': '[오류]'
-    }
+# 서버 설정
+SERVER_IP = "127.0.0.1"  # localhost
+GUI_MERGER_PORT = 9004       # data_merger 통신 포트
+ROBOT_COMMANDER_PORT = 9006  # 로봇 커맨더 포트
 
-    # 시그널: JSON 데이터(dict)와 이미지 바이트(bytes)를 전달
-    detection_received = pyqtSignal(dict, bytes)
+# 지역 이동 명령 목록
+MOVEMENT_COMMANDS = [CMD_MAP['MOVE_TO_A'], CMD_MAP['MOVE_TO_B'], CMD_MAP['RETURN_TO_BASE']]
 
-    def run(self):
-        if DEBUG:
-            print(f"{self.DEBUG_TAG['CONN']} 서버 연결 시도: {SERVER_IP}:{SERVER_PORT}")
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            try:
-                sock.connect((SERVER_IP, SERVER_PORT))
-                if DEBUG:
-                    print(f"{self.DEBUG_TAG['CONN']} 서버 연결 성공")
-            except Exception as e:
-                if DEBUG:
-                    print(f"{self.DEBUG_TAG['ERR']} 연결 실패: {e}")
-                return
-
-            while True:
-                try:
-                    header = sock.recv(4)
-                    if not header:
-                        if DEBUG:
-                            print(f"{self.DEBUG_TAG['ERR']} 헤더 수신 실패, 연결 종료")
-                        break
-                    
-                    total_length = int.from_bytes(header, 'big')
-                    if DEBUG:
-                        print(f"{self.DEBUG_TAG['RECV']} 패킷 길이: {total_length} 바이트")
-
-                    full_data = b''
-                    while len(full_data) < total_length:
-                        chunk = sock.recv(min(total_length - len(full_data), 4096))
-                        if not chunk:
-                            raise ConnectionError("데이터 수신 중 연결 종료")
-                        full_data += chunk
-
-                    parts = full_data.split(b'|', 1)
-                    if len(parts) != 2:
-                        raise ValueError("잘못된 데이터 형식: 구분자 없음")
-                    
-                    json_data, jpeg_data = parts
-                    data = json.loads(json_data.decode())
-                    
-                    if jpeg_data.endswith(b'\n'):
-                        jpeg_data = jpeg_data[:-1]
-
-                    if DEBUG:
-                        print(f"{self.DEBUG_TAG['PARSE']} JSON {len(json_data)}바이트, JPEG {len(jpeg_data)}바이트 처리 완료")
-
-                    self.detection_received.emit(data, jpeg_data)
-
-                except Exception as e:
-                    if DEBUG:
-                        print(f"{self.DEBUG_TAG['ERR']} 처리 실패: {e}")
-                    break
-
-class MainWindow(QMainWindow):
-    # 디버그 태그 정의
-    DEBUG_TAG = {
-        'INIT': '[초기화]',
-        'CONN': '[연결상태]',
-        'IMG': '[이미지처리]',
-        'DET': '[객체탐지]',
-        'UI': '[화면갱신]'
-    }
+class DataReceiverThread(QThread):
+    """서버로부터 데이터를 수신하는 스레드"""
+    detection_received = pyqtSignal(dict, bytes)  # (json_data, image_data)
+    connection_status = pyqtSignal(bool)          # 연결 상태
 
     def __init__(self):
         super().__init__()
-        # main_window UI 로드
-        loadUi('./gui/ui/main_window.ui', self)
+        self._running = True
+        self.socket = None
 
+    def stop(self):
+        """스레드 정지"""
+        self._running = False
+        if self.socket:
+            try:
+                self.socket.shutdown(socket.SHUT_RDWR)
+                self.socket.close()
+            except:
+                pass
+
+    def run(self):
+        """메인 수신 루프"""
         if DEBUG:
-            print(f"{self.DEBUG_TAG['INIT']} MainWindow 초기화 시작")
+            print(f"{DEBUG_TAG['INIT']} 데이터 수신 스레드 시작")
+            print(f"{DEBUG_TAG['CONN']} GUI MERGER 서버 연결 시도: {SERVER_IP}:{GUI_MERGER_PORT}")
 
-        # MonitoringTab 설정
-        self.monitor_tab = MonitoringTab()
-        self.tabWidget.removeTab(0)
-        self.tabWidget.insertTab(0, self.monitor_tab, 'Main Monitoring')
-
-        # TCP 수신 스레드 시작
-        if DEBUG:
-            print(f"{self.DEBUG_TAG['INIT']} DataMergerReceiverThread 시작")
-        self.receiver_thread = DataMergerReceiverThread()
-        self.receiver_thread.detection_received.connect(self.display_detection_result)
-        self.receiver_thread.start()
-
-        # 초기 상태 설정
-        self.monitor_tab.connectivity_label.setText('Disconnected')
-        self.monitor_tab.system_status_label.setText('Idle')
-        if DEBUG:
-            print(f"{self.DEBUG_TAG['INIT']} 초기화 완료")
-
-    def display_detection_result(self, data: dict, image_bytes: bytes):
-        if DEBUG:
-            print(f"{self.DEBUG_TAG['DET']} 탐지 결과 수신, 데이터: {data}")
-            print(f"{self.DEBUG_TAG['IMG']} 수신된 이미지 크기: {len(image_bytes)} 바이트")
-
-        # 이미지 처리
-        pixmap = QPixmap()
-        pixmap.loadFromData(image_bytes)
-        FIXED_WIDTH = 640
-        FIXED_HEIGHT = 480
-        scaled_pixmap = pixmap.scaled(
-            FIXED_WIDTH, 
-            FIXED_HEIGHT,
-            aspectRatioMode=Qt.KeepAspectRatio,
-            transformMode=Qt.SmoothTransformation
-        )
-        self.monitor_tab.live_feed_label.setPixmap(scaled_pixmap)
-        if DEBUG:
-            print(f"{self.DEBUG_TAG['IMG']} 이미지 리사이징 완료: {FIXED_WIDTH}x{FIXED_HEIGHT}")
-
-        # 탐지 결과 테이블 갱신
-        detections = data.get('detections', [])
-        table = self.monitor_tab.detections_table
-        table.setRowCount(len(detections))
-        for row, det in enumerate(detections):
+        # 소켓 생성 및 연결
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.socket.connect((SERVER_IP, GUI_MERGER_PORT))
+            self.connection_status.emit(True)
             if DEBUG:
-                print(f"{self.DEBUG_TAG['DET']} 탐지 항목 {row}: {det}")
-            table.setItem(row, 0, QTableWidgetItem(det.get('case', '-')))
-            table.setItem(row, 1, QTableWidgetItem(data.get('timestamp', '-')))
-            table.setItem(row, 2, QTableWidgetItem(data.get('location', '-')))
-            table.setItem(row, 3, QTableWidgetItem(det.get('label', '-')))
+                print(f"{DEBUG_TAG['CONN']} 서버 연결 성공")
 
-        # UI 상태 갱신
-        status = data.get('robot_status', 'Idle')
-        self.monitor_tab.system_status_label.setText(status)
-        self.monitor_tab.connectivity_label.setText('Connected')
+            # 메인 수신 루프
+            while self._running:
+                try:
+                    # 1. 헤더(4바이트) 수신
+                    header = self._receive_exact(4)
+                    if not header:
+                        if DEBUG:
+                            print(f"{DEBUG_TAG['ERR']} 헤더 수신 실패")
+                        break
+
+                    # 2. 전체 길이 계산
+                    total_length = int.from_bytes(header, 'big')
+                    if DEBUG:
+                        print("-----------------------------------------------------------")
+                        print(f"\n{DEBUG_TAG['RECV']} 메시지 수신 시작:")
+                        print(f"  - 헤더: {header!r} (0x{header.hex()})")
+                        print(f"  - 전체 길이: {total_length} 바이트")
+
+                    # 3. 페이로드 수신
+                    payload = self._receive_exact(total_length)
+                    if not payload:
+                        if DEBUG:
+                            print(f"{DEBUG_TAG['ERR']} 페이로드 수신 실패")
+                        break
+
+                    # 4. JSON과 이미지 분리
+                    try:
+                        json_data, image_data = self._process_payload(payload)
+                        self.detection_received.emit(json_data, image_data)
+                        if DEBUG:
+                            print(f"{DEBUG_TAG['RECV']} 메시지 처리 완료:")
+                            print(f"  - JSON 크기: {len(str(json_data))} 바이트")
+                            print(f"  - 이미지 크기: {len(image_data)} 바이트")
+                            print(f"  - 이미지 크기: {len(image_data)} 바이트")
+                    except Exception as e:
+                        if DEBUG:
+                            print(f"{DEBUG_TAG['ERR']} 메시지 처리 실패: {e}")
+                            print(traceback.format_exc())
+                        continue
+
+                except ConnectionError as e:
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['ERR']} 연결 오류: {e}")
+                    break
+                except Exception as e:
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['ERR']} 예외 발생: {e}")
+                        print(traceback.format_exc())
+                    continue
+
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 스레드 실행 오류: {e}")
+                print(traceback.format_exc())
+        finally:
+            if self.socket:
+                self.socket.close()
+            self.connection_status.emit(False)
+            if DEBUG:
+                print(f"{DEBUG_TAG['CONN']} 연결 종료")
+
+    def _receive_exact(self, size: int) -> bytes:
+        """정확한 크기만큼 데이터 수신"""
+        try:
+            data = b''
+            remaining = size
+            while remaining > 0:
+                chunk = self.socket.recv(min(remaining, 8192))
+                if not chunk:
+                    return None
+                data += chunk
+                remaining -= len(chunk)
+            return data
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 데이터 수신 오류: {e}")
+            return None
+
+    def _process_payload(self, payload: bytes) -> tuple:
+        """페이로드를 JSON과 이미지로 분리"""
+        try:
+            # 구분자('|')로 분리
+            parts = payload.split(b'|', 1)
+            if len(parts) != 2:
+                raise ValueError("잘못된 페이로드 형식")
+
+            # JSON 파싱
+            json_str = parts[0].decode('utf-8').strip()
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['RECV']} 수신된 JSON 문자열:")
+                print(f"  {json_str}")
+                
+            json_data = json.loads(json_str)
+
+            # 이미지 바이너리 (마지막 개행 제거)
+            image_data = parts[1].rstrip(b'\n')
+
+            return json_data, image_data
+
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 페이로드 처리 실패: {e}")
+                print(f"  - 페이로드 크기: {len(payload)} 바이트")
+                print(f"  - 시작 부분: {payload[:100]!r}")
+            raise
+
+class MainWindow(QMainWindow):
+    """메인 윈도우"""
+    def __init__(self, user_name=None):
+        super().__init__()
         if DEBUG:
-            print(f"{self.DEBUG_TAG['UI']} 시스템 상태 갱신: {status}")
+            print(f"\n{DEBUG_TAG['INIT']} MainWindow 초기화 시작")
+
+        # 사용자 이름 저장
+        self.user_name = user_name
+        
+        # UI 설정
+        self.setup_ui()
+        
+        # 수신 스레드 설정
+        self.setup_receiver()
+        
+        if DEBUG:
+            print(f"{DEBUG_TAG['INIT']} MainWindow 초기화 완료")
+
+    def setup_ui(self):
+        """UI 초기화"""
+        try:
+            # 기본 UI 로드
+            loadUi('./gui/ui/main_window.ui', self)
+            
+            # 윈도우 크기 설정
+            # self.setMinimumSize(1024, 768)  # 최소 크기 설정
+            self.resize(1200, 850)  # 초기 윈도우 크기 설정
+            self.setWindowTitle("NeighBot Monitoring System")
+
+            # 모니터링 탭 설정
+            self.monitoring_tab = MonitoringTab(user_name=self.user_name)
+            self.tabWidget.removeTab(0)
+            self.tabWidget.insertTab(0, self.monitoring_tab, 'Main Monitoring')
+            self.tabWidget.setCurrentIndex(0)
+
+            # 명령 시그널 연결
+            self.monitoring_tab.robot_command.connect(self.send_robot_command)
+            self.monitoring_tab.stream_command.connect(self.control_stream)
+
+            if DEBUG:
+                print(f"{DEBUG_TAG['INIT']} UI 초기화 완료")
+
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} UI 초기화 실패: {e}")
+                print(traceback.format_exc())
+
+    def setup_receiver(self):
+        """데이터 수신 스레드 설정"""
+        try:
+            self.receiver = DataReceiverThread()
+            self.receiver.detection_received.connect(self.handle_detection)
+            self.receiver.connection_status.connect(self.handle_connection_status)
+            self.receiver.start()
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['INIT']} 수신 스레드 시작됨")
+
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 수신 스레드 설정 실패: {e}")
+                print(traceback.format_exc())
+
+    def send_robot_command(self, command: str):
+        """로봇 명령 전송"""
+        try:
+            if command not in CMD_MAP:
+                if DEBUG:
+                    print(f"{DEBUG_TAG['ERR']} 알 수 없는 명령: {command}")
+                return
+
+            # 명령 패킷 구성
+            command_bytes = CMD_MAP[command]
+            packet = b'CMD' + command_bytes + b'\n'
+
+            if DEBUG:
+                print(f"\n{DEBUG_TAG['SEND']} 명령 전송:")
+                print(f"  - 명령: {command}")
+                print(f"  - 패킷: {packet!r}")
+                print(f"  - 바이트: {' '.join(hex(b)[2:] for b in packet)}")
+
+            # 지역 이동 명령인 경우 로봇 커맨더로 전송
+            if command in ["MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE"]:
+                if not hasattr(self, 'commander_socket'):
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['CONN']} 새 로봇 커맨더 소켓 생성")
+                    self.commander_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.commander_socket.connect((SERVER_IP, ROBOT_COMMANDER_PORT))
+                
+                # 로봇 커맨더로 전송
+                if DEBUG:
+                    print(f"{DEBUG_TAG['SEND']} 로봇 커맨더로 전송 (포트: {ROBOT_COMMANDER_PORT})")
+                self.commander_socket.sendall(packet)
+                
+            # 일반 명령은 기존 서버로 전송
+            else:
+                if not hasattr(self, 'command_socket'):
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['CONN']} 새 명령 소켓 생성")
+                    self.command_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.command_socket.connect((SERVER_IP, GUI_MERGER_PORT))
+
+                # 메인 서버로 전송
+                self.command_socket.sendall(packet)
+
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 명령 전송 완료")
+
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 명령 전송 실패: {e}")
+                print(traceback.format_exc())
+            
+            # 소켓 재설정
+            if command in ["MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE"] and hasattr(self, 'commander_socket'):
+                try:
+                    self.commander_socket.close()
+                except:
+                    pass
+                delattr(self, 'commander_socket')
+            elif hasattr(self, 'command_socket'):
+                try:
+                    self.command_socket.close()
+                except:
+                    pass
+                delattr(self, 'command_socket')
+
+    def control_stream(self, start: bool):
+        """스트리밍 시스템 활성화 여부 제어
+        첫 시작 시에만 사용되며, 이후로는 영상 수신은 계속됨
+        """
+        if DEBUG:
+            print(f"{DEBUG_TAG['IMG']} 시스템 초기 활성화: {start}")
+            
+        # 첫 시작 시 시스템 활성화를 위한 코드를 추가할 수 있음 (필요한 경우)
+        # 현재는 구현 필요 없음 - 항상 백그라운드에서 수신 중
+
+    def handle_detection(self, json_data: dict, image_data: bytes):
+        """탐지 데이터 처리"""
+        try:
+            if DEBUG:
+                print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신:")
+                print(f"  [헤더 정보]")
+                print(f"  - Frame ID: {json_data.get('frame_id')}")
+                print(f"  - 로봇 위치: {json_data.get('location', 'unknown')}")
+                print(f"  - 로봇 상태: {json_data.get('robot_status', 'unknown')}")
+                
+                # 탐지 결과가 있는 경우만 출력
+                detections = json_data.get('detections', [])
+                if detections:
+                    print("  [탐지 정보]")
+                    for det in detections:
+                        print(f"  - 탐지된 종류: {det.get('label', 'unknown')}")
+                        print(f"    상황 종류: {det.get('case', 'unknown')}")
+                        print(f"    전체 탐지 정보: {det}")
+
+            # 이미지 업데이트
+            if image_data:
+                self.monitoring_tab.update_camera_feed(image_data)
+
+            # 상태 및 위치 업데이트 (각 라벨에 맞게 분리)
+            status = json_data.get('robot_status', 'unknown')
+            location = json_data.get('location', 'unknown')
+            
+            # 개별 라벨에 각각 정보 업데이트
+            self.monitoring_tab.update_status("robot_location", location)
+            self.monitoring_tab.update_status("robot_status", status)
+
+            # 탐지 결과 업데이트
+            detections = json_data.get('detections', [])
+            if detections:
+                # 디버깅용 - 각 탐지 결과의 키 확인
+                if DEBUG:
+                    print(f"  [탐지 결과 키 확인]")
+                    for i, det in enumerate(detections):
+                        print(f"  - 탐지 {i+1} 키: {list(det.keys())}")
+                
+                detection_text = "\n".join(
+                    f"- {det.get('label', 'unknown')} ({det.get('case', 'unknown')})" 
+                    for det in detections
+                )
+                self.monitoring_tab.update_status("detections", detection_text)
+            else:
+                self.monitoring_tab.update_status("detections", "탐지된 객체 없음")
+
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 탐지 데이터 처리 실패: {e}")
+                print(traceback.format_exc())
+
+    def handle_connection_status(self, connected: bool):
+        """연결 상태 처리"""
+        try:
+            status = "연결됨" if connected else "연결 끊김"
+            self.monitoring_tab.update_status("connectivity", status)
+            if DEBUG:
+                print(f"{DEBUG_TAG['CONN']} 연결 상태 변경: {status}")
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 상태 업데이트 실패: {e}")
+
+    def closeEvent(self, event):
+        """윈도우 종료 처리"""
+        if hasattr(self, 'receiver'):
+            self.receiver.stop()
+            self.receiver.wait()
+        if hasattr(self, 'command_socket'):
+            self.command_socket.close()
+        if hasattr(self, 'commander_socket'):
+            self.commander_socket.close()
+        super().closeEvent(event)

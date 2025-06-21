@@ -1,0 +1,22 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Login Request",
+    "type": "object",
+    "properties": {
+        "user_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "사용자 고유 ID"
+        },
+        "password": {
+            "type": "string",
+            "minLength": 1,
+            "description": "사용자 로그인 비밀번호"
+        }
+    },
+    "required": [
+        "user_id",
+        "password"
+    ],
+    "additionalProperties": false
+}

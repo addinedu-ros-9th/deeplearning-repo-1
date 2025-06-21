@@ -36,7 +36,7 @@ class DBManager(threading.Thread):
             # [수정된 핵심]
             # 1. 실제 DB 컬럼명인 `user_name`으로 WHERE 절을 수정합니다.
             # 2. 로그인 성공 시 반환할 이름은 `name` 컬럼에서 가져옵니다.
-            query = "SELECT password, name FROM users WHERE user_name = %s"
+            query = "SELECT password, name FROM user WHERE user_name = %s"
             
             cursor = conn.cursor()
             # 쿼리에 GUI로부터 받은 로그인 ID(user_id_from_gui)를 사용
