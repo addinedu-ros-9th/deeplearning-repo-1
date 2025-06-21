@@ -105,12 +105,11 @@ class EventAnalyzer(threading.Thread):
     def _process_detection_result(self, data_str):
         try:
             result_json = json.loads(data_str)
-            detections = result_json.get('detections', [])
-            significant_labels = {'person', 'knife', 'gun'}
-            is_significant = any(d.get('label') in significant_labels for d in detections)
-            if is_significant:
-                print(f"[➡️ 큐 입력] 4. EventAnalyzer -> DataMerger : (patrolling) frame_id {result_json.get('frame_id')}")
-                self.output_queue.put(result_json)
+            # ✨ 더 이상 특정 객체를 필터링하지 않고 모든 결과를 큐에 넣습니다.
+            # significant_labels 와 is_significant 관련 로직을 제거하고,
+            # if 조건문 없이 바로 큐에 데이터를 넣습니다.
+            print(f"[➡️ 큐 입력] 4. EventAnalyzer -> DataMerger : (patrolling) frame_id {result_json.get('frame_id')}")
+            self.output_queue.put(result_json)
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"[{self.name}] JSON 파싱 오류: {e}")
 
