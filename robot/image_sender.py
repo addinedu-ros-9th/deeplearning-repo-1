@@ -5,9 +5,10 @@ import time
 import sys
 import subprocess
 from datetime import datetime, timezone
+#/home/robolee/venv/dl_venv/bin/python3 /home/robolee/dev_ws/deeplearning-repo-1/robot/image_sender.py
 
 # ✅ 설정: 수신기 IP 및 포트
-SERVER_IP = '192.168.0.10'   # 수신기 (메인서버) IP
+SERVER_IP = '192.168.45.238'   # 수신기 (메인서버) IP
 SERVER_PORT = 9001
 
 # ✅ 현재 로컬 IP 확인
@@ -36,7 +37,7 @@ def can_ping(ip: str, timeout=1):
 local_ip = get_local_ip()
 print(f"📡 현재 송신기 IP: {local_ip}")
 
-if not local_ip.startswith("192.168.0."):
+if not local_ip.startswith("192.168.45."):
     print(f"❌ 의도한 공유기에 연결되어 있지 않습니다. 현재 IP: {local_ip}")
     sys.exit(1)
 
