@@ -34,9 +34,10 @@ class DBManager(threading.Thread):
             conn = self._get_connection()
             
             # [수정된 핵심]
-            # 1. 실제 DB 컬럼명인 `user_name`으로 WHERE 절을 수정합니다.
-            # 2. 로그인 성공 시 반환할 이름은 `name` 컬럼에서 가져옵니다.
-            query = "SELECT password, name FROM user WHERE user_name = %s"
+            # 1. WHERE 절에서 비교할 컬럼을 'user_name' -> 'user_account'로 변경합니다.
+            #    (GUI에서 입력한 ID는 user_account 컬럼의 값입니다.)
+            # 2. SELECT 절에서 가져올 사용자 이름 컬럼을 'name' -> 'user_name'으로 변경합니다.
+            query = "SELECT password, user_name FROM user WHERE user_account = %s"
             
             cursor = conn.cursor()
             # 쿼리에 GUI로부터 받은 로그인 ID(user_id_from_gui)를 사용

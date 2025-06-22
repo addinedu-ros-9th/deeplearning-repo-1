@@ -1,55 +1,48 @@
 # =====================================================================================
-# FILE: main_server/event_analyzer.py
-#
-# PURPOSE:
-#   - AI 서버(Detection Manager)로부터 TCP를 통해 객체 탐지 분석 결과를 수신.
-#   - 수신된 결과 중에서 'person', 'knife', 'gun'과 같이 의미 있는 이벤트만 필터링.
-#   - 필터링된 유의미한 이벤트 데이터를 DataMerger가 사용할 수 있도록 'event_result_queue'에 전송.
-#   - SystemManager로부터 공유받은 robot_status 값을 확인하여, 로봇이 'idle' 또는 'moving'
-#     상태일 때는 분석 결과 수신 및 처리를 일시 중지하는 '조건부 실행자' 역할을 수행.
-#
-# 주요 로직:
-#   1. TCP 서버 실행 (run):
-#      - AI 서버의 연결 요청을 지속적으로 수신 대기.
-#      - 새로운 클라이언트(AI 서버)가 연결될 때마다 전용 처리 스레드(_handle_client)를 생성.
-#   2. 데이터 수신 및 처리 (_handle_client):
-#      - 루프 시작 시, 로봇의 상태(robot_status['state'])를 먼저 확인.
-#      - 'idle' 또는 'moving' 상태이면, 처리를 건너뛰고 잠시 대기하여 CPU 사용을 방지.
-#      - 'patrolling' 상태일 때만, 4바이트 길이 헤더가 포함된 TCP 스트림을 수신하여 JSON 데이터를 파싱.
-#      - 파싱된 데이터를 _process_detection_result 메서드로 전달.
-#   3. 이벤트 필터링 (_process_detection_result):
-#      - JSON 데이터 안의 'detections' 배열을 검사.
-#      - 미리 정의된 주요 객체('person', 'knife', 'gun')가 포함된 경우에만, 해당 데이터를
-#        'event_result_queue'에 삽입.
+# FILE: main_server/event_analyzer.py (첫 검출 방지 로직 추가 버전)
 # =====================================================================================
 
-# -------------------------------------------------------------------------------------
-# [섹션 1] 모듈 임포트
-# -------------------------------------------------------------------------------------
+# ... (모듈 임포트 생략) ...
 import socket
 import threading
 import queue
 import json
 import struct
 import time
+from collections import deque, Counter
 
-# -------------------------------------------------------------------------------------
-# [섹션 2] EventAnalyzer 클래스 정의
-# -------------------------------------------------------------------------------------
 class EventAnalyzer(threading.Thread):
+    # 탐지 안정성 분석을 위한 상수
+    WINDOW_SECONDS = 5.0
+    STABILITY_THRESHOLD = 0.8
+    # ✨ [신규] 안정성 분석을 시작하기 위한 최소 프레임 수
+    # - 이 값은 로봇 카메라의 FPS에 따라 조절할 수 있습니다. (예: 10~15 FPS 기준 10프레임은 약 0.7~1초에 해당)
+    MIN_FRAMES_FOR_STABILITY_CHECK = 10 
+
+    # Label to Case 매핑 정의
+    CASE_MAPPING = {
+        'knife': 'danger',
+        'gun': 'danger',
+        'fall_down': 'danger',
+        'cigarette': 'illegality'
+    }
+
+    # ... (__init__, run, _handle_client, stop 메서드는 이전과 동일) ...
     def __init__(self, listen_port, output_queue, robot_status):
         super().__init__()
         self.name = "EventAnalyzerThread"
         self.running = True
         self.output_queue = output_queue
         self.robot_status = robot_status
+        self.detection_window = deque()
+        self.last_detected_label = None
         self.is_paused_log_printed = False
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(('0.0.0.0', listen_port))
         self.server_socket.listen(5)
         print(f"[{self.name}] AI 서버의 분석 결과 수신 대기 중... (Port: {listen_port})")
-
+    
     def run(self):
         while self.running:
             try:
@@ -71,6 +64,8 @@ class EventAnalyzer(threading.Thread):
                         print(f"[ℹ️ 상태 확인] EventAnalyzer: '{current_state}' 상태이므로 분석을 일시 중지합니다.")
                         self.is_paused_log_printed = True
                     time.sleep(0.5)
+                    self.detection_window.clear()
+                    self.last_detected_label = None
                     continue
                 
                 if self.is_paused_log_printed:
@@ -88,9 +83,11 @@ class EventAnalyzer(threading.Thread):
                     if not packet: break
                     data += packet
                 
-                trailing_data = conn.recv(1) 
-
-
+                try:
+                    trailing_data = conn.recv(1, socket.MSG_DONTWAIT)
+                except BlockingIOError:
+                    pass
+                
                 result_json_str = data.decode('utf-8')
                 result_json_for_print = json.loads(result_json_str)
                 print(f"[✅ TCP 수신] 3. AI_Server -> EventAnalyzer : frame_id {result_json_for_print.get('frame_id')}, dets {len(result_json_for_print.get('detections',[]))}건")
@@ -105,15 +102,66 @@ class EventAnalyzer(threading.Thread):
     def _process_detection_result(self, data_str):
         try:
             result_json = json.loads(data_str)
-            # ✨ 더 이상 특정 객체를 필터링하지 않고 모든 결과를 큐에 넣습니다.
-            # significant_labels 와 is_significant 관련 로직을 제거하고,
-            # if 조건문 없이 바로 큐에 데이터를 넣습니다.
-            print(f"[➡️ 큐 입력] 4. EventAnalyzer -> DataMerger : (patrolling) frame_id {result_json.get('frame_id')}")
+            now = time.time()
+            
+            detections = result_json.get('detections', [])
+            for detection in detections:
+                label = detection.get('label')
+                case_value = self.CASE_MAPPING.get(label)
+                if case_value:
+                    detection['case'] = case_value
+
+            detected_classes = [d['label'] for d in detections]
+            self.detection_window.append((now, detected_classes))
+
+            while self.detection_window and now - self.detection_window[0][0] > self.WINDOW_SECONDS:
+                self.detection_window.popleft()
+
+            total_frames_in_window = len(self.detection_window)
+            is_stable_detection_found = False
+
+            # ✨ [핵심 수정] 최소 프레임 수 조건을 만족할 때만 안정성 분석 수행
+            if total_frames_in_window >= self.MIN_FRAMES_FOR_STABILITY_CHECK:
+                recent_classes = [cls for _, classes in self.detection_window for cls in classes]
+                counter = Counter(recent_classes)
+                for label, count in counter.most_common():
+                    if label not in self.CASE_MAPPING:
+                        continue
+                        
+                    stability = count / total_frames_in_window
+                    if stability >= self.STABILITY_THRESHOLD:
+                        is_stable_detection_found = True
+                        break # 안정적인 첫 탐지를 발견하면 루프 탈출
+                
+                # 안정성 검사 후 상태 변경 로직 (이전과 동일)
+                if is_stable_detection_found:
+                    if self.robot_status.get('state') != 'detected' or self.last_detected_label != label:
+                        print(f"\n=======================================================================")
+                        print(f"[🚨 안정적 탐지!] '{label}' 객체가 {self.WINDOW_SECONDS}초 내 {stability:.2%}의 안정도로 탐지됨.")
+                        print(f"[🚦 시스템 상태] EventAnalyzer: 상태 변경: patrolling -> detected")
+                        print(f"=======================================================================\n")
+                        self.robot_status['state'] = 'detected'
+                        self.last_detected_label = label
+                else: # 안정적인 탐지가 없다면 'patrolling'으로 복귀
+                    if self.robot_status.get('state') == 'detected':
+                        print(f"[ℹ️ 상태 복귀] EventAnalyzer: 안정적 탐지 사라짐. 상태 변경: detected -> patrolling")
+                        self.robot_status['state'] = 'patrolling'
+                        self.last_detected_label = None
+            else: # 최소 프레임 수를 만족하지 못했다면, 'detected' 였다가 사라진 경우를 대비해 상태 복귀 로직만 수행
+                 if self.robot_status.get('state') == 'detected':
+                        print(f"[ℹ️ 상태 복귀] EventAnalyzer: 탐지 객체 사라짐 (윈도우 비워짐). 상태 변경: detected -> patrolling")
+                        self.robot_status['state'] = 'patrolling'
+                        self.last_detected_label = None
+
+
+            # 수정된 최종 결과를 DataMerger로 전달
             self.output_queue.put(result_json)
+
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"[{self.name}] JSON 파싱 오류: {e}")
-
+            
     def stop(self):
         self.running = False
-        self.server_socket.close()
+        if self.server_socket:
+            self.server_socket.close()
         print(f"[{self.name}] 종료 요청 수신.")
