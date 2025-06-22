@@ -5,6 +5,7 @@
 gui/test_system_manager_server.py
 test_image_sender.py
 test_system_manager.py
+log_viewer.py
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

@@ -3,13 +3,14 @@
 import json
 import socket
 import traceback
-from datetime import datetime
-from PyQt5.QtWidgets import QMainWindow
+from datetime import datetime, timedelta
+from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.uic import loadUi
 from gui.tabs.monitoring_tab import MonitoringTab
-from shared.protocols import CMD_MAP
+from gui.tabs.case_logs_tab import CaseLogsTab
+from shared.protocols import CMD_MAP, GET_LOGS
 from gui.src.detection_dialog import DetectionDialog
 
 # 디버그 모드
@@ -233,6 +234,13 @@ class MainWindow(QMainWindow):
             self.monitoring_tab = MonitoringTab(user_name=self.user_name)
             self.tabWidget.removeTab(0)
             self.tabWidget.insertTab(0, self.monitoring_tab, 'Main Monitoring')
+            
+            # Case Logs 탭 설정
+            # 미리 로그 데이터를 불러온 후 탭에 전달
+            logs = self.fetch_logs()
+            self.case_logs_tab = CaseLogsTab(parent=self, initial_logs=logs)
+            self.tabWidget.addTab(self.case_logs_tab, 'Case Logs')
+            
             self.tabWidget.setCurrentIndex(0)
             
             # 탭 변경 시 이벤트 연결 (탭 변경 후 돌아와도 고정된 상태 유지)
@@ -624,6 +632,67 @@ class MainWindow(QMainWindow):
                 print(f"{DEBUG_TAG['ERR']} DB 로그 전송 실패: {e}")
                 print(traceback.format_exc())
 
+    def fetch_logs(self):
+        """DB 매니저로부터 로그 데이터 로드"""
+        try:
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} DB 매니저에 로그 요청")
+                
+            # 요청 데이터 생성
+            request = b'CMD' + GET_LOGS + b'\n'
+            
+            # DB 매니저에 소켓 연결
+            db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            db_socket.connect((DB_MANAGER_HOST, DB_MANAGER_PORT))
+            
+            # 요청 전송
+            db_socket.sendall(request)
+            
+            # 응답 수신
+            response = b''
+            while True:
+                chunk = db_socket.recv(4096)
+                if not chunk:
+                    break
+                response += chunk
+                if response.endswith(b'\n'):
+                    break
+            
+            # 소켓 종료
+            db_socket.close()
+            
+            # JSON 파싱
+            response_str = response.decode('utf-8').strip()
+            log_data = json.loads(response_str)
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['RECV']} DB 매니저로부터 로그 데이터 수신")
+                print(f"  - 로그 개수: {len(log_data.get('logs', []))}")
+            
+            # 로그 데이터 반환
+            return log_data.get('logs', [])
+            
+        except ConnectionRefusedError:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} DB 매니저 연결 실패")
+            QMessageBox.warning(self, "연결 실패", "DB 매니저 서버에 연결할 수 없습니다.\n관리자에게 문의하세요.")
+            return []  # 연결 실패시 빈 리스트 반환
+            
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 로그 로드 실패: {e}")
+                print(traceback.format_exc())
+            QMessageBox.warning(self, "데이터 로드 실패", f"로그 데이터를 불러오는 중 오류가 발생했습니다.\n{str(e)}")
+            return []  # 예외 발생시 빈 리스트 반환
+    
+    def create_sample_logs(self):
+        """실제 DB 데이터를 사용하도록 변경 (샘플 데이터 사용 안함)"""
+        if DEBUG:
+            print(f"{DEBUG_TAG['INIT']} 로그 데이터 없음 (DB 연결 실패)")
+        
+        # 빈 로그 데이터 반환
+        return []
+
     def closeEvent(self, event):
         """윈도우 종료 처리"""
         if hasattr(self, 'receiver'):
@@ -659,6 +728,11 @@ class MainWindow(QMainWindow):
                 self.status_frozen = True
                 if DEBUG:
                     print(f"{DEBUG_TAG['INIT']} 상태 표시 고정됨")
+                    
+                # 로그 탭으로 이동한 경우 로그 데이터 갱신
+                if index == 1:  # Case Logs 탭 인덱스가 1인 경우
+                    logs = self.fetch_logs()
+                    self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
             else:
                 # 모니터링 탭으로 돌아온 경우 - 고정된 상태 복원
                 self.restore_frozen_status_display()
