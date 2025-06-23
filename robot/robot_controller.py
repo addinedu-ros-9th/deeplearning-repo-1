@@ -17,11 +17,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SOUNDS_DIR = os.path.join(SCRIPT_DIR, "sounds")
 
 SOUND_MAPPING = {
-    FIRE_REPORT: "119_report.mp3",
-    POLICE_REPORT: "112_report.mp3",
-    ILLEGAL_WARNING: "illegal_warning.mp3",
-    DANGER_WARNING: "danger_warning.mp3",
-    EMERGENCY_WARNING: "emergency_warning.mp3"
+    FIRE_REPORT: "119_report.mp3",      #안쓰임
+    POLICE_REPORT: "112_report.mp3",    #안쓰임 
+    ILLEGAL_WARNING: "horn.mp3",
+    DANGER_WARNING: "police_siren.mp3",
+    EMERGENCY_WARNING: "abulance.mp3"
 }
 
 
