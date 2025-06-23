@@ -662,21 +662,33 @@ class MainWindow(QMainWindow):
             # 요청 전송
             db_socket.sendall(request)
             
-            # 응답 수신
-            response = b''
-            while True:
-                chunk = db_socket.recv(4096)
+            # 응답 수신 - 4바이트 헤더(길이) 먼저 수신
+            header = b''
+            while len(header) < 4:
+                chunk = db_socket.recv(4 - len(header))
                 if not chunk:
-                    break
-                response += chunk
-                if response.endswith(b'\n'):
-                    break
+                    raise ConnectionError("DB 매니저와 연결이 종료되었습니다.")
+                header += chunk
+            
+            # 헤더에서 본문 길이 추출
+            body_length = int.from_bytes(header, 'big')
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['RECV']} 헤더 수신 (길이: {body_length})")
+            
+            # 본문 수신
+            body = b''
+            while len(body) < body_length:
+                chunk = db_socket.recv(min(4096, body_length - len(body)))
+                if not chunk:
+                    raise ConnectionError("DB 매니저로부터 응답 수신 중 연결이 끊겼습니다.")
+                body += chunk
             
             # 소켓 종료
             db_socket.close()
             
             # JSON 파싱
-            response_str = response.decode('utf-8').strip()
+            response_str = body.decode('utf-8')
             log_data = json.loads(response_str)
             
             if DEBUG:
