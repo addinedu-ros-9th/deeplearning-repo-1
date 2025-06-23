@@ -460,6 +460,21 @@ class MainWindow(QMainWindow):
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
                         print(f"{DEBUG_TAG['DET']} 새 팝업 생성")
                         print(f"{DEBUG_TAG['DET']} 상태 표시 고정됨")
+                        print(f"{DEBUG_TAG['DET']} 첫번째 탐지 정보:")
+                        print(f"  - 레이블: {detection.get('label', 'unknown')}")
+                        print(f"  - 케이스 유형: {detection.get('case', 'unknown')}")
+                        print(f"  - 위치: {detection.get('location', 'unknown')}")
+                        print(f"  - 객체 ID: {detection.get('id', 'unknown')}")
+                        print(f"  - 신뢰도: {detection.get('confidence', 'unknown')}")
+                        
+                        # 탐지 정보의 모든 키와 값 출력
+                        print(f"\n  [전체 탐지 정보 상세 출력]")
+                        for key, value in detection.items():
+                            print(f"  - {key}: {value}")
+                            
+                        # JSON 포맷으로도 출력
+                        print(f"\n  [JSON 형식 탐지 정보]")
+                        print(f"  {json.dumps(detection, indent=2, ensure_ascii=False)}")
                     
                     # 사용자 대응 액션 초기화
                     self.reset_response_actions()
