@@ -69,7 +69,7 @@ class LoginWindow(QMainWindow):
         user_id = self.input_id.text()
         password = self.input_pw.text()
         message = {
-            "user_id": user_id,
+            "id": user_id,
             "password": password
         }
 
@@ -115,7 +115,7 @@ class LoginWindow(QMainWindow):
                 self.welcome_msg = QMessageBox(self)
                 self.welcome_msg.setWindowTitle("환영합니다")
                 self.welcome_msg.setIcon(QMessageBox.Information)
-                self.welcome_msg.setText(f"{response_data.get('user_name')}님 환영합니다.")
+                self.welcome_msg.setText(f"{response_data.get('name')}님 환영합니다.")
                 # X 버튼과 OK 버튼을 추가하여 사용자가 직접 닫을 수 있게 함
                 self.welcome_msg.setStandardButtons(QMessageBox.Ok)
                 # 모달리스 설정 - 팝업이 다른 창 조작을 방해하지 않게 함
@@ -126,10 +126,10 @@ class LoginWindow(QMainWindow):
                 
                 try:
                     # 사용자 이름 가져오기
-                    user_name = response_data.get("user_name", "사용자")
+                    name = response_data.get("name", "사용자")
                     
                     # 메인 윈도우 준비 (사용자 이름 전달)
-                    self.main_window = MainWindow(user_name=user_name)
+                    self.main_window = MainWindow(user_name=name)
                     
                     # 2초 후 환영 메시지 닫고 메인 윈도우 표시
                     QTimer.singleShot(2000, self.close_welcome_and_open_main)
