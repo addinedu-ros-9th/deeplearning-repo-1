@@ -1,6 +1,7 @@
 # =====================================================================================
 # FILE: main_server/event_analyzer.py (첫 검출 방지 로직 추가 버전)
 # =====================================================================================
+# 처음에 들어오는 60프레임 정도는 무시하고 그 이후부터 detect수행
 
 # ... (모듈 임포트 생략) ...
 import socket
@@ -13,11 +14,11 @@ from collections import deque, Counter
 
 class EventAnalyzer(threading.Thread):
     # 탐지 안정성 분석을 위한 상수
-    WINDOW_SECONDS = 5.0
+    WINDOW_SECONDS = 3.0
     STABILITY_THRESHOLD = 0.8
     # ✨ [신규] 안정성 분석을 시작하기 위한 최소 프레임 수
     # - 이 값은 로봇 카메라의 FPS에 따라 조절할 수 있습니다. (예: 10~15 FPS 기준 10프레임은 약 0.7~1초에 해당)
-    MIN_FRAMES_FOR_STABILITY_CHECK = 10 
+    MIN_FRAMES_FOR_STABILITY_CHECK = 25
 
     # Label to Case 매핑 정의
     CASE_MAPPING = {
