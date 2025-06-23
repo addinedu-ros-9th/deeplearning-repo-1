@@ -180,12 +180,14 @@ class DataReceiverThread(QThread):
 
 class MainWindow(QMainWindow):
     """메인 윈도우"""
-    def __init__(self, user_name=None):
+    # :sparkles: __init__ 메서드 시그니처를 수정합니다.
+    def __init__(self, user_id=None, user_name=None):
         super().__init__()
         if DEBUG:
             print(f"\n{DEBUG_TAG['INIT']} MainWindow 초기화 시작")
 
-        # 사용자 이름 저장
+        # 사용자 ID와 이름 저장
+        self.user_id = user_id
         self.user_name = user_name
         
         # 탐지 및 대응 추적용 변수들
@@ -204,7 +206,7 @@ class MainWindow(QMainWindow):
             "is_ignored": 0,
             "is_119_reported": 0,
             "is_112_reported": 0, 
-            "is_illeal_warned": 0,
+            "is_illegal_warned": 0,
             "is_danger_warned": 0,
             "is_emergency_warned": 0,
             "is_case_closed": 0
@@ -539,7 +541,7 @@ class MainWindow(QMainWindow):
         elif action_type == "POLICE_REPORT":
             self.response_actions["is_112_reported"] = 1
         elif action_type == "ILLEGAL_WARNING":
-            self.response_actions["is_illeal_warned"] = 1
+            self.response_actions["is_illegal_warned"] = 1
         elif action_type == "DANGER_WARNING":
             self.response_actions["is_danger_warned"] = 1
         elif action_type == "EMERGENCY_WARNING":
@@ -572,7 +574,7 @@ class MainWindow(QMainWindow):
             "is_ignored": 0,
             "is_119_reported": 0,
             "is_112_reported": 0, 
-            "is_illeal_warned": 0,
+            "is_illegal_warned": 0,
             "is_danger_warned": 0,
             "is_emergency_warned": 0,
             "is_case_closed": 0
@@ -599,11 +601,11 @@ class MainWindow(QMainWindow):
                         "detection_type": self.current_detection.get("label", "unknown"),
                         "robot_id": "ROBOT001",  # 로봇 ID
                         "location_id": self.current_detection.get("location", "unknown"),
-                        "user_account": self.user_name if self.user_name else "user",
+                        "user_id": self.user_id if self.user_id else "user",  # 사용자 ID 사용
                         "is_ignored": self.response_actions["is_ignored"],
                         "is_119_reported": self.response_actions["is_119_reported"],
                         "is_112_reported": self.response_actions["is_112_reported"],
-                        "is_illeal_warned": self.response_actions["is_illeal_warned"],
+                        "is_illegal_warned": self.response_actions["is_illegal_warned"],
                         "is_danger_warned": self.response_actions["is_danger_warned"],
                         "is_emergency_warned": self.response_actions["is_emergency_warned"],
                         "is_case_closed": self.response_actions["is_case_closed"],
