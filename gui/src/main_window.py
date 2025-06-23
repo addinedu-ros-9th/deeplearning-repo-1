@@ -470,9 +470,9 @@ class MainWindow(QMainWindow):
                     )
                     self.frozen_status["detections"] = detection_text
                     
-                    # 탐지 시작 시간 저장 (UTC 표준시, ISO 8601 형식)
+                    # 탐지 시작 시간 저장 (UTC 표준시, MySQL 호환 ISO 8601 형식)
                     from datetime import datetime
-                    self.detection_start_time = datetime.utcnow().isoformat() + "Z"
+                    self.detection_start_time = datetime.utcnow().isoformat() + "+00:00"
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
