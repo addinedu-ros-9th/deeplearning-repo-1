@@ -1,4 +1,4 @@
-# main_server/db_manager.py (DB 스키마 동기화 최종 버전)
+# main_server/db_manager.py (최종 통합 버전)
 
 import socket
 import threading
@@ -26,18 +26,18 @@ class DBManager(threading.Thread):
         return mysql.connector.connect(**self.db_config)
 
     # ======================================================================
-    # Section 1: 로그인 및 사용자 인증 관련 메서드
+    # Section 1: 로그인 관련 (이전과 동일)
     # ======================================================================
     def verify_user(self, user_id_from_gui: str, password: str) -> (bool, str):
         conn = None
         try:
             conn = self._get_connection()
-            query = "SELECT password, user_name FROM user WHERE user_account = %s"
+            query = "SELECT password, name FROM user WHERE id = %s"
             cursor = conn.cursor()
             cursor.execute(query, (user_id_from_gui,))
             result = cursor.fetchone()
             if result and result[0] == password:
-                user_full_name = result[1]
+                user_full_name = result[1] 
                 print(f"[{self.name}] DB: '{user_id_from_gui}' ({user_full_name}) 인증 성공")
                 return True, user_full_name
             print(f"[{self.name}] DB: '{user_id_from_gui}' 인증 실패")
@@ -50,19 +50,17 @@ class DBManager(threading.Thread):
                 conn.close()
 
     def _process_login_request(self, conn: socket.socket, request_data: dict):
-        is_success, user_name = self.verify_user(
-            request_data.get('user_id'), 
-            request_data.get('password')
-        )
-        response = {"user_name": user_name, "result": "succeed" if is_success else "fail"}
+        is_success, user_name = self.verify_user(request_data.get('id'), request_data.get('password'))
+        response = {"name": user_name, "result": "succeed" if is_success else "fail"}
         response_bytes = json.dumps(response).encode('utf-8')
         header = struct.pack('>I', len(response_bytes))
         conn.sendall(header + response_bytes)
 
     # ======================================================================
-    # Section 2: 사건 로그 저장 관련 메서드 (✨✨✨ 핵심 수정 ✨✨✨)
+    # Section 2: 사건 로그 저장 관련 메서드 (✨✨✨ 스키마 수정 반영 ✨✨✨)
     # ======================================================================
     def _generate_paths(self, detection_type: str, start_time_str: str) -> (str, str):
+        # ... (이전과 동일) ...
         try:
             dt_obj = datetime.fromisoformat(start_time_str.replace("+00:00", ""))
             timestamp_str = dt_obj.strftime('%Y%m%d_%H%M%S')
@@ -72,67 +70,52 @@ class DBManager(threading.Thread):
         except (ValueError, TypeError) as e:
             print(f"[{self.name}] 시간 파싱 오류: {e}. 경로를 null로 설정합니다.")
             return None, None
-
+            
     def _get_location_id(self, cursor, location_name: str) -> int:
-        if not location_name or location_name == 'unknown':
-            return None
+        # ... (이전과 동일) ...
+        if not location_name or location_name == 'unknown': return None
         try:
             query = "SELECT id FROM location WHERE location_name = %s"
             cursor.execute(query, (location_name,))
             result = cursor.fetchone()
-            if result:
-                return result[0]
-            else:
-                print(f"[{self.name}] 경고: location 테이블에 '{location_name}' 지역이 없습니다.")
-                return None
+            return result[0] if result else None
         except mysql.connector.Error as err:
             print(f"[{self.name}] DB 오류 (location_id 조회): {err}")
             return None
 
     def _process_case_log_insert(self, request_data: dict):
-        """사건 로그 저장 요청을 실제로 처리하는 메서드."""
         conn = None
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-
             for log_entry in request_data.get('logs', []):
                 location_id = self._get_location_id(cursor, log_entry.get('location_id'))
-                
-                # [핵심 수정 1] location_id가 NULL인데 DB에서 허용하지 않으므로, 이 로그는 건너뛰고 오류를 출력
                 if location_id is None:
-                    print(f"[{self.name}] 저장 실패: location_id가 유효하지 않아 로그(case_id: {log_entry.get('case_id')})를 저장할 수 없습니다. 'unknown' 값 확인 필요.")
-                    continue # 다음 로그로 넘어감
-
-                image_path, video_path = self._generate_paths(
-                    log_entry.get('detection_type'), 
-                    log_entry.get('start_time')
-                )
+                    print(f"[{self.name}] 저장 실패: location_id가 유효하지 않아 로그를 저장할 수 없습니다. 'unknown' 값 확인 필요.")
+                    continue
+                image_path, video_path = self._generate_paths(log_entry.get('detection_type'), log_entry.get('start_time'))
                 
-                # [핵심 수정 2] INSERT 쿼리를 실제 DB 스키마에 맞춤
-                # - 'id' 컬럼은 auto_increment이므로 쿼리에서 제외
-                # - 'is_illeal_warned' 컬럼명 오타 수정
+                # [수정] 실제 DB 스키마에 맞게 INSERT 쿼리 컬럼명 수정
                 query = """
                     INSERT INTO case_log (
-                        case_type, detection_type, robot_id, location_id, user_account, 
+                        case_type, detection_type, robot_id, location_id, user_id, 
                         image_path, video_path, is_ignored, is_119_reported, is_112_reported, 
-                        is_illeal_warned, is_danger_warned, is_emergency_warned, is_case_closed, 
+                        is_illegal_warned, is_danger_warned, is_emergency_warned, is_case_closed, 
                         start_time, end_time
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
+                # [수정] user_account -> user_id, is_illeal_warned -> is_illegal_warned
                 log_data_tuple = (
                     log_entry.get('case_type'), log_entry.get('detection_type'),
-                    log_entry.get('robot_id'), location_id, log_entry.get('user_account'), image_path, video_path,
+                    log_entry.get('robot_id'), location_id, log_entry.get('user_id'), image_path, video_path,
                     log_entry.get('is_ignored'), log_entry.get('is_119_reported'), log_entry.get('is_112_reported'),
-                    log_entry.get('is_illeal_warned'), log_entry.get('is_danger_warned'),
+                    log_entry.get('is_illegal_warned'), log_entry.get('is_danger_warned'),
                     log_entry.get('is_emergency_warned'), log_entry.get('is_case_closed'),
                     log_entry.get('start_time'), log_entry.get('end_time')
                 )
                 cursor.execute(query, log_data_tuple)
-            
             conn.commit()
             print(f"[{self.name}] 성공: 사건 로그를 DB에 저장했습니다.")
-
         except mysql.connector.Error as err:
             print(f"[{self.name}] DB 오류 (사건 로그 저장): {err}")
             if conn: conn.rollback()
@@ -140,9 +123,8 @@ class DBManager(threading.Thread):
             if conn and conn.is_connected():
                 conn.close()
 
-    # (이하 나머지 코드는 이전과 동일하므로 생략하지 않고 모두 포함)
     # ======================================================================
-    # Section 3: 로그 조회 관련 메서드
+    # Section 3: 로그 조회 관련 메서드 (✨✨✨ 버그 수정 ✨✨✨)
     # ======================================================================
     def _process_get_logs_request(self, conn: socket.socket):
         print(f"[{self.name}] 로그 조회 요청 수신.")
@@ -157,7 +139,12 @@ class DBManager(threading.Thread):
                 for key in ['start_time', 'end_time']:
                     if row.get(key) and isinstance(row[key], datetime):
                         row[key] = row[key].isoformat()
-            response_data = {"logs": logs}
+
+            # [수정] 명세서에 따라 응답에 "cmd" 필드를 추가합니다. (이전 코드 버그 수정)
+            response_data = {
+                "cmd": "log_list_response",
+                "logs": logs
+            }
             response_bytes = json.dumps(response_data, ensure_ascii=False).encode('utf-8')
             header = struct.pack('>I', len(response_bytes))
             conn.sendall(header + response_bytes)
@@ -169,14 +156,14 @@ class DBManager(threading.Thread):
                 db_conn.close()
 
     # ======================================================================
-    # Section 4: 메인 핸들러 및 스레드 실행
+    # Section 4: 메인 핸들러 및 스레드 실행 (이전과 동일)
     # ======================================================================
     def handle_client(self, conn: socket.socket, addr):
+        # ... (이전과 동일) ...
         print(f"[{self.name}] GUI 클라이언트 연결됨: {addr}")
         try:
             peek_data = conn.recv(4, socket.MSG_PEEK)
             if not peek_data: return
-
             if peek_data.startswith(b'CMD'):
                 cmd_data = conn.recv(1024)
                 command_code = cmd_data[3:4]
@@ -189,10 +176,9 @@ class DBManager(threading.Thread):
                 data_bytes = conn.recv(msg_len)
                 request_data = json.loads(data_bytes.decode('utf-8'))
                 print(f"[{self.name}] GUI로부터 수신 (JSON): {request_data}")
-
                 if 'logs' in request_data:
                     self._process_case_log_insert(request_data)
-                elif 'user_id' in request_data:
+                elif 'id' in request_data:
                     self._process_login_request(conn, request_data)
         except (ConnectionResetError, struct.error, json.JSONDecodeError) as e:
             print(f"[{self.name}] 클라이언트({addr}) 처리 중 오류 또는 연결 종료: {e}")
@@ -201,6 +187,7 @@ class DBManager(threading.Thread):
             conn.close()
 
     def run(self):
+        # ... (이전과 동일) ...
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
@@ -214,6 +201,7 @@ class DBManager(threading.Thread):
                 if not self.running: break
     
     def stop(self):
+        # ... (이전과 동일) ...
         self.running = False
         if self.server_socket:
             self.server_socket.close()
