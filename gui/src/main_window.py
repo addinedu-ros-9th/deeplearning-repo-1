@@ -452,9 +452,9 @@ class MainWindow(QMainWindow):
                     )
                     self.frozen_status["detections"] = detection_text
                     
-                    # 탐지 시작 시간 저장 (UTC 표준시)
+                    # 탐지 시작 시간 저장 (UTC 표준시, ISO 8601 형식)
                     from datetime import datetime
-                    self.detection_start_time = datetime.utcnow().isoformat() + "+00:00"
+                    self.detection_start_time = datetime.utcnow().isoformat() + "Z"
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
@@ -520,6 +520,10 @@ class MainWindow(QMainWindow):
             self.response_actions["is_ignored"] = 1
             self.response_actions["is_case_closed"] = 1  # 무시도 케이스 종료로 간주
             
+            if DEBUG:
+                print(f"{DEBUG_TAG['DET']} 사용자가 탐지를 무시함 - DB에 로그 전송 시작")
+                print(f"{DEBUG_TAG['DET']} 현재 대응 상태: {self.response_actions}")
+            
             # DB 매니저에게 로그 전송
             self.send_log_to_db_manager()
             
@@ -527,8 +531,12 @@ class MainWindow(QMainWindow):
             self.popup_active = False
             self.status_frozen = False
             
+            # 로봇 이동 버튼 다시 활성화
+            self.monitoring_tab.enable_movement_buttons()
+            
             if DEBUG:
-                print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨")
+                print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨 (무시 처리)")
+                print(f"{DEBUG_TAG['DET']} 로봇 이동 버튼 재활성화")
 
     def update_response_action(self, action_type):
         """사용자 대응 액션 업데이트
@@ -581,11 +589,16 @@ class MainWindow(QMainWindow):
         }
 
     def send_log_to_db_manager(self):
-        """DB 매니저에게 로그 전송"""
+        """DB 매니저에게 로그 전송
+        
+        "IGNORE" 또는 "CASE_CLOSED" 버튼 클릭 시 호출되어,
+        시작 시간(start_time)과 종료 시간(end_time)을 포함한 로그를 
+        DB 매니저에게 전송합니다.
+        """
         try:
-            # 현재 시간을 종료 시간으로 설정
+            # 현재 시간을 종료 시간으로 설정 (UTC 표준시, ISO 8601 형식)
             from datetime import datetime
-            end_time = datetime.utcnow().isoformat() + "+00:00"
+            end_time = datetime.utcnow().isoformat() + "Z"
             
             if not self.current_detection or not self.detection_start_time:
                 if DEBUG:
@@ -596,11 +609,11 @@ class MainWindow(QMainWindow):
             log_data = {
                 "logs": [
                     {
-                        "case_id": self.current_detection.get("case_id", 6),  # 기본값 6 (예시에서 사용된 값)
+                        "case_id": self.current_detection.get("case_id", 999),  # 기본값 6 (예시에서 사용된 값)
                         "case_type": self.current_detection.get("case", "unknown"),
                         "detection_type": self.current_detection.get("label", "unknown"),
                         "robot_id": "ROBOT001",  # 로봇 ID
-                        "location_id": self.current_detection.get("location", "unknown"),
+                        "location_id": self.current_detection.get("location_id", self.current_detection.get("location", "unknown")),
                         "user_id": self.user_id if self.user_id else "user",  # 사용자 ID 사용
                         "is_ignored": self.response_actions["is_ignored"],
                         "is_119_reported": self.response_actions["is_119_reported"],
@@ -609,8 +622,8 @@ class MainWindow(QMainWindow):
                         "is_danger_warned": self.response_actions["is_danger_warned"],
                         "is_emergency_warned": self.response_actions["is_emergency_warned"],
                         "is_case_closed": self.response_actions["is_case_closed"],
-                        "start_time": self.detection_start_time,
-                        "end_time": end_time
+                        "start_time": self.detection_start_time,  # 탐지 시작 시간 (handle_detection에서 설정)
+                        "end_time": end_time  # 사용자 대응 종료 시간 (현재 시각)
                     }
                 ]
             }
@@ -622,13 +635,14 @@ class MainWindow(QMainWindow):
             # 헤더 생성 (4바이트 길이)
             header = len(body).to_bytes(4, 'big')
             
-            # 패킷 조립
+            # 패킷 조립 (4바이트 헤더 + JSON)
             packet = header + body
             
             if DEBUG:
                 print(f"{DEBUG_TAG['SEND']} DB 매니저에 로그 전송:")
                 print(f"  - 헤더 크기: {int.from_bytes(header, 'big')} 바이트")
-                print(f"  - 로그 내용: {log_data}")
+                print(f"  - 로그 내용: {json.dumps(log_data, indent=2)}")
+                print(f"  - JSON 패킷: {body[:100]}...")
                 
             # DB 매니저에 소켓 연결 및 데이터 전송
             db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -640,6 +654,11 @@ class MainWindow(QMainWindow):
                 
             # 연결 종료
             db_socket.close()
+            
+            # 로그 전송 후 현재 탐지 정보 초기화
+            self.current_detection = None
+            self.current_detection_image = None
+            self.detection_start_time = None
             
         except Exception as e:
             if DEBUG:
