@@ -235,10 +235,13 @@ class MainWindow(QMainWindow):
             self.tabWidget.removeTab(0)
             self.tabWidget.insertTab(0, self.monitoring_tab, 'Main Monitoring')
             
-            # Case Logs 탭 설정
-            # 초기에는 빈 로그로 시작 (탭 클릭 시 로드됨)
+            # Case Logs 탭 설정 - 기존 탭을 우리의 CaseLogsTab 객체로 대체
+            # 기존 UI에 이미 Case Logs 탭이 있으므로 별도 추가하지 않고 대체만 함
             self.case_logs_tab = CaseLogsTab(parent=self, initial_logs=[])
-            self.tabWidget.addTab(self.case_logs_tab, 'Case Logs')
+            # 기존 Case Logs 탭 인덱스 찾기 (일반적으로 1번)
+            case_logs_index = 1
+            self.tabWidget.removeTab(case_logs_index)
+            self.tabWidget.insertTab(case_logs_index, self.case_logs_tab, 'Case Logs')
             
             self.tabWidget.setCurrentIndex(0)
             
@@ -739,7 +742,9 @@ class MainWindow(QMainWindow):
                     print(f"{DEBUG_TAG['INIT']} 상태 표시 고정됨")
                     
                 # 로그 탭으로 이동한 경우 로그 데이터 갱신
-                if index == 1:  # Case Logs 탭 인덱스가 1인 경우
+                # 탭 인덱스가 아닌 실제 위젯 객체를 비교하여 Case Logs 탭 여부 확인
+                current_tab = self.tabWidget.widget(index)
+                if current_tab == self.case_logs_tab:
                     if DEBUG:
                         print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청")
                     logs = self.fetch_logs()
