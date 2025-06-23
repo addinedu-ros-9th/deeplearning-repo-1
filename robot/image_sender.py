@@ -7,7 +7,7 @@ import subprocess
 from datetime import datetime, timezone
 
 # ✅ 설정: 수신기 IP 및 포트
-SERVER_IP = '192.168.0.10'   # 수신기 (메인서버) IP
+SERVER_IP = '192.168.0.8'   # 수신기 (메인서버) IP
 SERVER_PORT = 9001
 
 # ✅ 현재 로컬 IP 확인
