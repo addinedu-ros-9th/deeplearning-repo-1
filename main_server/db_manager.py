@@ -1,4 +1,4 @@
-# main_server/db_manager.py (최종 통합 버전)
+# main_server/db_manager.py (로그인 응답 및 필드명 수정 버전)
 
 import socket
 import threading
@@ -7,7 +7,7 @@ import struct
 import mysql.connector
 from datetime import datetime
 
-# from shared.protocols import GET_LOGS 
+# from shared.protocols import GET_LOGS
 GET_LOGS = b'\x0c'
 
 
@@ -26,7 +26,7 @@ class DBManager(threading.Thread):
         return mysql.connector.connect(**self.db_config)
 
     # ======================================================================
-    # Section 1: 로그인 관련 (이전과 동일)
+    # Section 1: 로그인 및 사용자 인증 관련 메서드
     # ======================================================================
     def verify_user(self, user_id_from_gui: str, password: str) -> (bool, str):
         conn = None
@@ -37,7 +37,7 @@ class DBManager(threading.Thread):
             cursor.execute(query, (user_id_from_gui,))
             result = cursor.fetchone()
             if result and result[0] == password:
-                user_full_name = result[1] 
+                user_full_name = result[1]
                 print(f"[{self.name}] DB: '{user_id_from_gui}' ({user_full_name}) 인증 성공")
                 return True, user_full_name
             print(f"[{self.name}] DB: '{user_id_from_gui}' 인증 실패")
@@ -50,17 +50,26 @@ class DBManager(threading.Thread):
                 conn.close()
 
     def _process_login_request(self, conn: socket.socket, request_data: dict):
-        is_success, user_name = self.verify_user(request_data.get('id'), request_data.get('password'))
-        response = {"name": user_name, "result": "succeed" if is_success else "fail"}
+        """사용자 로그인 요청을 처리하고 결과를 클라이언트에 전송합니다."""
+        user_id = request_data.get('id')
+        password = request_data.get('password')
+
+        is_success, user_name = self.verify_user(user_id, password)
+
+        # ✨ [수정 1] 명세서(인덱스 2)에 따라 응답에 사용자 'id'를 추가합니다.
+        response = {
+            "id": user_id if is_success else None,
+            "name": user_name,
+            "result": "succeed" if is_success else "fail"
+        }
         response_bytes = json.dumps(response).encode('utf-8')
         header = struct.pack('>I', len(response_bytes))
         conn.sendall(header + response_bytes)
 
     # ======================================================================
-    # Section 2: 사건 로그 저장 관련 메서드 (✨✨✨ 스키마 수정 반영 ✨✨✨)
+    # Section 2: 사건 로그 저장 관련 메서드
     # ======================================================================
     def _generate_paths(self, detection_type: str, start_time_str: str) -> (str, str):
-        # ... (이전과 동일) ...
         try:
             dt_obj = datetime.fromisoformat(start_time_str.replace("+00:00", ""))
             timestamp_str = dt_obj.strftime('%Y%m%d_%H%M%S')
@@ -70,10 +79,10 @@ class DBManager(threading.Thread):
         except (ValueError, TypeError) as e:
             print(f"[{self.name}] 시간 파싱 오류: {e}. 경로를 null로 설정합니다.")
             return None, None
-            
+
     def _get_location_id(self, cursor, location_name: str) -> int:
-        # ... (이전과 동일) ...
-        if not location_name or location_name == 'unknown': return None
+        if not location_name or location_name == 'unknown':
+            return None
         try:
             query = "SELECT id FROM location WHERE location_name = %s"
             cursor.execute(query, (location_name,))
@@ -91,26 +100,27 @@ class DBManager(threading.Thread):
             for log_entry in request_data.get('logs', []):
                 location_id = self._get_location_id(cursor, log_entry.get('location_id'))
                 if location_id is None:
-                    print(f"[{self.name}] 저장 실패: location_id가 유효하지 않아 로그를 저장할 수 없습니다. 'unknown' 값 확인 필요.")
+                    print(f"[{self.name}] 저장 실패: location_id가 유효하지 않아 로그(case_id: {log_entry.get('case_id')})를 저장할 수 없습니다. 'unknown' 값 확인 필요.")
                     continue
                 image_path, video_path = self._generate_paths(log_entry.get('detection_type'), log_entry.get('start_time'))
-                
-                # [수정] 실제 DB 스키마에 맞게 INSERT 쿼리 컬럼명 수정
+
+                # ✨ [수정 2] DB 스키마에 맞게 is_illegal_warned 컬럼명 오타 수정
                 query = """
                     INSERT INTO case_log (
-                        case_type, detection_type, robot_id, location_id, user_id, 
-                        image_path, video_path, is_ignored, is_119_reported, is_112_reported, 
-                        is_illegal_warned, is_danger_warned, is_emergency_warned, is_case_closed, 
+                        case_type, detection_type, robot_id, location_id, user_id,
+                        image_path, video_path, is_ignored, is_119_reported, is_112_reported,
+                        is_illegal_warned, is_danger_warned, is_emergency_warned, is_case_closed,
                         start_time, end_time
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                # [수정] user_account -> user_id, is_illeal_warned -> is_illegal_warned
                 log_data_tuple = (
                     log_entry.get('case_type'), log_entry.get('detection_type'),
                     log_entry.get('robot_id'), location_id, log_entry.get('user_id'), image_path, video_path,
                     log_entry.get('is_ignored'), log_entry.get('is_119_reported'), log_entry.get('is_112_reported'),
-                    log_entry.get('is_illegal_warned'), log_entry.get('is_danger_warned'),
-                    log_entry.get('is_emergency_warned'), log_entry.get('is_case_closed'),
+                    log_entry.get('is_illegal_warned'), # 키 이름도 올바르게 수정
+                    log_entry.get('is_danger_warned'),
+                    log_entry.get('is_emergency_warned'),
+                    log_entry.get('is_case_closed'),
                     log_entry.get('start_time'), log_entry.get('end_time')
                 )
                 cursor.execute(query, log_data_tuple)
@@ -124,7 +134,7 @@ class DBManager(threading.Thread):
                 conn.close()
 
     # ======================================================================
-    # Section 3: 로그 조회 관련 메서드 (✨✨✨ 버그 수정 ✨✨✨)
+    # Section 3 & 4 (로그 조회, 메인 핸들러)는 이전과 동일합니다.
     # ======================================================================
     def _process_get_logs_request(self, conn: socket.socket):
         print(f"[{self.name}] 로그 조회 요청 수신.")
@@ -139,8 +149,6 @@ class DBManager(threading.Thread):
                 for key in ['start_time', 'end_time']:
                     if row.get(key) and isinstance(row[key], datetime):
                         row[key] = row[key].isoformat()
-
-            # [수정] 명세서에 따라 응답에 "cmd" 필드를 추가합니다. (이전 코드 버그 수정)
             response_data = {
                 "cmd": "log_list_response",
                 "logs": logs
@@ -155,11 +163,7 @@ class DBManager(threading.Thread):
             if db_conn and db_conn.is_connected():
                 db_conn.close()
 
-    # ======================================================================
-    # Section 4: 메인 핸들러 및 스레드 실행 (이전과 동일)
-    # ======================================================================
     def handle_client(self, conn: socket.socket, addr):
-        # ... (이전과 동일) ...
         print(f"[{self.name}] GUI 클라이언트 연결됨: {addr}")
         try:
             peek_data = conn.recv(4, socket.MSG_PEEK)
@@ -187,7 +191,6 @@ class DBManager(threading.Thread):
             conn.close()
 
     def run(self):
-        # ... (이전과 동일) ...
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
@@ -201,7 +204,6 @@ class DBManager(threading.Thread):
                 if not self.running: break
     
     def stop(self):
-        # ... (이전과 동일) ...
         self.running = False
         if self.server_socket:
             self.server_socket.close()
