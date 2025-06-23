@@ -492,10 +492,15 @@ class MainWindow(QMainWindow):
         if DEBUG:
             print(f"{DEBUG_TAG['DET']} 사용자 응답: {response}")
         
-        # 응답이 "PROCEED"(진행)인 경우 응답 명령 버튼들 활성화
+        # 응답이 "PROCEED"(진행)인 경우 응답 명령 버튼들 활성화하고 이동 버튼 비활성화
         if response == "PROCEED":
             # 응답 버튼만 활성화하고, 서버에 명령을 보내지 않음
             self.monitoring_tab.set_response_buttons_enabled(True)
+            
+            # 로봇 이동 버튼 비활성화 (위험 상황이니 이동 금지)
+            self.monitoring_tab.disable_movement_buttons()
+            if DEBUG:
+                print(f"{DEBUG_TAG['DET']} 위험 상황 대응 중: 로봇 이동 버튼 비활성화")
             
             # 탐지 이미지를 메인 윈도우에 출력
             if self.current_detection_image:
@@ -542,6 +547,11 @@ class MainWindow(QMainWindow):
             
             # 케이스 종료 시 DB에 로그 전송
             self.send_log_to_db_manager()
+            
+            # 케이스 종료 시 이동 버튼 다시 활성화 (현재 위치에 맞게)
+            self.monitoring_tab.enable_movement_buttons()
+            if DEBUG:
+                print(f"{DEBUG_TAG['DET']} 사건 종료: 로봇 이동 버튼 재활성화")
             
             # 팝업 및 상태 고정 해제
             self.popup_active = False
