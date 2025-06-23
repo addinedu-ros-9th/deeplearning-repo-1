@@ -43,16 +43,13 @@ class CaseLogsTab(QWidget):
         self.logs = initial_logs or []  # 로그 데이터 저장 (초기값 사용)
         self.filtered_logs = self.logs.copy()  # 필터링된 로그 데이터
         self.selected_log = None  # 현재 선택된 로그
+        self.first_load = True  # 첫 로드 여부 플래그
         
         # 콤보박스 초기화
         self.populate_comboboxes()
         
         # 테이블 업데이트
         self.update_table()
-        
-        # 로그 데이터가 없으면 메시지 표시
-        if not self.logs:
-            QMessageBox.information(self, "데이터 없음", "로그 데이터가 없습니다.\n실제 DB에 데이터가 있는지 확인하세요.")
         
     def initUI(self):
         """UI 초기화"""
@@ -110,6 +107,10 @@ class CaseLogsTab(QWidget):
         
         # 테이블 업데이트
         self.update_table()
+        
+        # 로그 데이터가 없으면 메시지 표시
+        if not self.logs:
+            QMessageBox.information(self, "데이터 없음", "로그 데이터가 없습니다.\n실제 DB에 데이터가 있는지 확인하세요.")
         
     def populate_comboboxes(self):
         """콤보박스 옵션 채우기"""

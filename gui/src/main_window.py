@@ -236,9 +236,8 @@ class MainWindow(QMainWindow):
             self.tabWidget.insertTab(0, self.monitoring_tab, 'Main Monitoring')
             
             # Case Logs 탭 설정
-            # 미리 로그 데이터를 불러온 후 탭에 전달
-            logs = self.fetch_logs()
-            self.case_logs_tab = CaseLogsTab(parent=self, initial_logs=logs)
+            # 초기에는 빈 로그로 시작 (탭 클릭 시 로드됨)
+            self.case_logs_tab = CaseLogsTab(parent=self, initial_logs=[])
             self.tabWidget.addTab(self.case_logs_tab, 'Case Logs')
             
             self.tabWidget.setCurrentIndex(0)
@@ -741,6 +740,8 @@ class MainWindow(QMainWindow):
                     
                 # 로그 탭으로 이동한 경우 로그 데이터 갱신
                 if index == 1:  # Case Logs 탭 인덱스가 1인 경우
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청")
                     logs = self.fetch_logs()
                     self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
             else:
