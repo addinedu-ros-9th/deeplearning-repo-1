@@ -9,8 +9,8 @@ import traceback
 class DetectionDialog(QDialog):
     """탐지 결과를 표시하는 팝업 다이얼로그"""
     
-    # 사용자 응답에 대한 시그널
-    response_signal = pyqtSignal(str)  # "PROCEED" 또는 "IGNORE"
+    # 사용자 응답에 대한 시그널 (응답유형, 탐지정보)
+    response_signal = pyqtSignal(str, dict)  # "PROCEED"/"IGNORE", 탐지정보
     
     def __init__(self, parent=None, detection=None, image_data=None):
         super().__init__(parent)
@@ -136,5 +136,6 @@ class DetectionDialog(QDialog):
     def handle_response(self, response):
         """사용자 응답 처리"""
         print(f"사용자 응답: {response}")
-        self.response_signal.emit(response)
+        # 탐지 정보와 함께 응답 시그널 발생
+        self.response_signal.emit(response, self.detection or {})
         self.accept()

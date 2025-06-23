@@ -1,6 +1,7 @@
 # gui/tabs/monitoring_tab.py
 
 import os
+import datetime
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -10,7 +11,7 @@ from PyQt5.QtCore import (
     Qt, QPropertyAnimation, QPoint,
     QEasingCurve, QTimer, pyqtSignal
 )
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QColor
 from PyQt5.uic import loadUi
 
 
@@ -18,7 +19,7 @@ from PyQt5.uic import loadUi
 DEBUG = True
 
 # UI 파일 경로
-MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab5.ui')
+MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab7.ui')
 MONITORING_TAP_MAP_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'neighbot_map6.jpg')
 
 # MonitoringTab: Main Monitoring 탭의 UI 로드만 담당
@@ -58,6 +59,9 @@ class MonitoringTab(QWidget):
         self.user_name = user_name or "사용자"  # 사용자 이름 (기본값 설정)
         self.system_ready = False          # 시스템 준비 상태 (첫 스트리밍 시작 후 True)
         self.streaming = False             # 스트리밍 표시 여부 (화면에 보여주는지)
+        self.feedback_timer = QTimer()     # 피드백 메시지용 타이머
+        self.feedback_timer.timeout.connect(self.clear_feedback_message)
+        self.original_detections_text = ""  # 원래 탐지 라벨 텍스트 저장용
         self.init_ui()
         self.init_map()
         self.init_robot()
@@ -112,11 +116,11 @@ class MonitoringTab(QWidget):
             self.btn_emergency_warning = self.findChild(QPushButton, "btn_emergency_warning")
             self.btn_case_closed = self.findChild(QPushButton, "btn_case_closed")
 
-            self.btn_fire_report.clicked.connect(lambda: self.robot_command.emit("FIRE_REPORT"))
-            self.btn_police_report.clicked.connect(lambda: self.robot_command.emit("POLICE_REPORT"))
-            self.btn_illegal_warning.clicked.connect(lambda: self.robot_command.emit("ILLEGAL_WARNING"))
-            self.btn_danger_warning.clicked.connect(lambda: self.robot_command.emit("DANGER_WARNING"))
-            self.btn_emergency_warning.clicked.connect(lambda: self.robot_command.emit("EMERGENCY_WARNING"))
+            self.btn_fire_report.clicked.connect(lambda: self.handle_command_button("FIRE_REPORT"))
+            self.btn_police_report.clicked.connect(lambda: self.handle_command_button("POLICE_REPORT"))
+            self.btn_illegal_warning.clicked.connect(lambda: self.handle_command_button("ILLEGAL_WARNING"))
+            self.btn_danger_warning.clicked.connect(lambda: self.handle_command_button("DANGER_WARNING"))
+            self.btn_emergency_warning.clicked.connect(lambda: self.handle_command_button("EMERGENCY_WARNING"))
             
             # CASE_CLOSED 버튼은 명령 전송 후 버튼 비활성화 처리
             self.btn_case_closed.clicked.connect(self.handle_case_closed)
@@ -467,6 +471,11 @@ class MonitoringTab(QWidget):
         self.streaming이 True일 때만 화면에 표시합니다.
         """
         try:
+            # 이미지 수신 시간 기록
+            current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            if DEBUG:
+                print(f"[이미지 수신] 카메라 피드 {current_time}")
+            
             # 영상 데이터 유효성 검사 (항상 수행)
             if not image_data:
                 if DEBUG:
@@ -514,6 +523,11 @@ class MonitoringTab(QWidget):
             image_data (bytes): 이미지 바이너리 데이터
         """
         try:
+            # 이미지 수신 시간 기록
+            current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            if DEBUG:
+                print(f"[이미지 수신] 탐지 이미지 {current_time}")
+                
             if not image_data:
                 if DEBUG:
                     print("탐지 이미지 업데이트 실패: 이미지 데이터 없음")
@@ -558,25 +572,21 @@ class MonitoringTab(QWidget):
                     self.robot_status_label.setText("로봇 상태: 비활성화 - 시작 버튼을 눌러주세요")
                     return
                 
-                # 시스템은 준비되었지만 스트리밍 화면이 비활성화된 경우
-                if not self.streaming:
-                    self.robot_status_label.setText("로봇 상태: 스트리밍 비활성화 - 시작 버튼을 눌러주세요")
-                    return
-                
                 # 로봇 상태 업데이트
                 formatted_msg = f"로봇 상태: {message}"
                 self.robot_status_label.setText(formatted_msg)
                 self.update_robot_status(message)
                 
+                # detected 상태면 녹화중 표시
+                if message.lower() == 'detected':
+                    self.show_recording_indicator(True)
+                else:
+                    self.show_recording_indicator(False)
+                
             elif status_type == "robot_location":
                 # 로봇 위치만 업데이트
                 # 시스템이 준비되지 않은 경우
                 if not self.system_ready:
-                    self.robot_location_label.setText("로봇 위치: 대기 중")
-                    return
-                
-                # 시스템은 준비되었지만 스트리밍 비활성화
-                if not self.streaming:
                     self.robot_location_label.setText("로봇 위치: 대기 중")
                     return
                 
@@ -611,7 +621,22 @@ class MonitoringTab(QWidget):
                             self.current_location = actual_location
                             if self.system_ready:
                                 self.enable_movement_buttons()
-                                
+            
+            elif status_type == "detections":
+                # 현재 진행 중인 이벤트 상황 업데이트
+                if not self.system_ready:
+                    self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
+                    return
+                
+                # 피드백 메시지가 표시 중이면 원본 텍스트만 업데이트
+                if self.feedback_timer.isActive():
+                    self.original_detections_text = f"탐지 상태: {message}"
+                else:
+                    self.detections_label.setText(f"탐지 상태: {message}")
+                    
+                if DEBUG:
+                    print(f"탐지 상태 업데이트: {message}")
+                    
             elif status_type == "system":
                 # 기존 로직 유지 (하위 호환성)
                 # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
@@ -620,10 +645,8 @@ class MonitoringTab(QWidget):
                     self.update_status("robot_location", "대기 중")
                     return
                 
-                # 시스템은 준비되었지만 스트리밍 화면이 비활성화된 경우
-                if not self.streaming:
-                    self.update_status("robot_status", "스트리밍 비활성화 - 시작 버튼을 눌러주세요")
-                    self.update_status("robot_location", "대기 중")
+                # 시스템은 준비되었지만 스트리밍 화면이 비활성화된 경우 - 영상만 중지
+                # 상태 정보는 계속 업데이트됨
                     return
                 
                 # 메시지에서 상태와 위치 분리
@@ -635,18 +658,6 @@ class MonitoringTab(QWidget):
                     self.update_status("robot_location", location_raw)
                     self.update_status("robot_status", status)
                     
-            elif status_type == "detections":
-                # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
-                if not self.system_ready:
-                    self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
-                # 스트리밍 화면이 비활성화된 경우
-                elif not self.streaming:
-                    self.detections_label.setText("탐지 상태: 스트리밍을 시작하면 탐지 결과가 표시됩니다")
-                # 정상 동작 (시스템 활성화 + 스트리밍 활성화)
-                else:
-                    # 탐지 메시지에 접두사 추가
-                    formatted_msg = f"탐지 상태:\n{message}"
-                    self.detections_label.setText(formatted_msg)
         except Exception as e:
             if DEBUG:
                 print(f"상태 업데이트 실패: {e}")
@@ -801,9 +812,165 @@ class MonitoringTab(QWidget):
         # CASE_CLOSED 명령 전송
         self.robot_command.emit("CASE_CLOSED")
         
+        # 피드백 메시지 표시
+        self.show_feedback_message('command', {'command': 'CASE_CLOSED'})
+        
         # 버튼 비활성화
         self.set_response_buttons_enabled(False)
         
         if DEBUG:
             print("사건 종료 처리: 명령 버튼 비활성화 완료")
+    
+    def show_feedback_message(self, message_type, action_info):
+        """사용자 액션 피드백 메시지 표시 (1.5초 후 사라짐)
+        
+        Args:
+            message_type (str): 'command' 또는 'dialog' 등 메시지 유형
+            action_info (dict): 액션 정보 (객체/상황/호출/클릭 정보 등)
+        """
+        try:
+            # 원래 텍스트 저장 (처음 호출시 한 번만)
+            if not self.original_detections_text and self.detections_label:
+                self.original_detections_text = self.detections_label.text()
+            
+            # 메시지 구성
+            if message_type == 'command':
+                command = action_info.get('command', 'UNKNOWN')
+                message = f"명령 실행: {command}"
+                
+                # 명령별 세부 메시지 구성
+                if command == "FIRE_REPORT":
+                    message = "🔥 소방서 신고 명령이 전송되었습니다"
+                elif command == "POLICE_REPORT":
+                    message = "🚨 경찰서 신고 명령이 전송되었습니다" 
+                elif command == "ILLEGAL_WARNING":
+                    message = "⚠️ 위법행위 경고 방송을 시작합니다"
+                elif command == "DANGER_WARNING":
+                    message = "⚠️ 위험상황 경고 방송을 시작합니다"
+                elif command == "EMERGENCY_WARNING":
+                    message = "🚑 긴급상황 경고 방송을 시작합니다"
+                elif command == "CASE_CLOSED":
+                    message = "✅ 상황 종료 - 기록을 저장합니다"
+            
+            elif message_type == 'dialog':
+                response = action_info.get('response', 'UNKNOWN')
+                case = action_info.get('case', 'unknown')
+                label = action_info.get('label', 'unknown')
+                
+                # 객체/상황 정보 변환
+                case_str = {
+                    'danger': '위험',
+                    'illegal': '위법',
+                    'emergency': '응급',
+                    'unknown': '알 수 없음'
+                }.get(case, case)
+                
+                label_str = {
+                    'knife': '칼',
+                    'gun': '총',
+                    'fallen': '쓰러짐',
+                    'smoking': '흡연',
+                    'unknown': '알 수 없음'
+                }.get(label, label)
+                
+                if response == "PROCEED":
+                    message = f"✅ [{case_str}] {label_str} 상황 대응 진행합니다"
+                else:  # "IGNORE"
+                    message = f"❌ [{case_str}] {label_str} 상황 무시 처리되었습니다"
+            
+            else:
+                message = f"알림: {action_info.get('message', '작업이 완료되었습니다')}"
+                
+            # 메시지 표시
+            if self.detections_label:
+                self.detections_label.setText(f"알림: {message}")
+                self.detections_label.setStyleSheet("QLabel { color: red; font-weight: bold; }")
+                
+                # 타이머 시작 (1.5초 후 메시지 사라짐)
+                self.feedback_timer.start(1500)
+                
+            if DEBUG:
+                print(f"피드백 메시지 표시: {message}")
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"피드백 메시지 표시 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
+                
+    def clear_feedback_message(self):
+        """피드백 메시지 지우기"""
+        try:
+            if self.detections_label:
+                # 원래 스타일로 복원
+                self.detections_label.setStyleSheet("")
+                
+                # 원래 텍스트로 복원 또는 기본값
+                if self.original_detections_text:
+                    self.detections_label.setText(self.original_detections_text)
+                else:
+                    self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
+                    
+            # 타이머 중지
+            self.feedback_timer.stop()
+            
+        except Exception as e:
+            if DEBUG:
+                print(f"피드백 메시지 지우기 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
+
+    def handle_command_button(self, command):
+        """명령 버튼 클릭 핸들러 (피드백 메시지 표시 + 명령 전송)
+        
+        Args:
+            command (str): 명령어 문자열
+        """
+        # 명령 시그널 발생
+        self.robot_command.emit(command)
+        
+        # 피드백 메시지 표시
+        self.show_feedback_message('command', {'command': command})
+        
+        if DEBUG:
+            print(f"명령 버튼 클릭됨: {command}")
+
+    def show_recording_indicator(self, show=False):
+        """녹화중 표시 (빨간 점)
+        
+        Args:
+            show (bool): 표시 여부
+        """
+        try:
+            # 상태 그룹박스 찾기
+            status_group = self.findChild(QGroupBox, "status")
+            if not status_group:
+                if DEBUG:
+                    print("녹화중 표시 실패: 'status' 그룹박스를 찾을 수 없음")
+                return
+            
+            # 녹화중 표시 라벨이 없으면 생성
+            recording_label = self.findChild(QLabel, "recording_indicator")
+            if not recording_label:
+                recording_label = QLabel(status_group)
+                recording_label.setObjectName("recording_indicator")
+                recording_label.setGeometry(5, 5, 16, 16)  # 왼쪽 상단 작은 크기
+                recording_label.setStyleSheet("background-color: red; border-radius: 8px;")
+                recording_label.setToolTip("녹화중")
+
+            # 표시 여부 설정
+            if show:
+                recording_label.show()
+                # 깜박이는 효과를 위한 타이머가 필요하다면 여기에 추가
+            else:
+                recording_label.hide()
+                
+            if DEBUG:
+                print(f"녹화중 표시 {'활성화' if show else '비활성화'}")
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"녹화중 표시 처리 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
 

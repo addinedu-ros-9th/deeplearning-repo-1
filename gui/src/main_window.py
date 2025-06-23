@@ -3,7 +3,7 @@
 import json
 import socket
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
@@ -379,8 +379,10 @@ class MainWindow(QMainWindow):
     def handle_detection(self, json_data: dict, image_data: bytes):
         """탐지 데이터 처리"""
         try:
+            # 이미지 데이터 수신 시간 기록
+            current_time = datetime.now(timezone.utc).isoformat()
             if DEBUG:
-                print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신:")
+                print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신: {current_time}")
                 print(f"  [헤더 정보]")
                 print(f"  - Frame ID: {json_data.get('frame_id')}")
                 print(f"  - 로봇 위치: {json_data.get('location_id', 'unknown')}")  # location_id로 변경
@@ -430,13 +432,42 @@ class MainWindow(QMainWindow):
                         for i, det in enumerate(detections):
                             print(f"  - 탐지 {i+1} 키: {list(det.keys())}")
                     
-                    detection_text = "\n".join(
-                        f"- {det.get('label', 'unknown')} ({det.get('case', 'unknown')})" 
-                        for det in detections
-                    )
+                    # 탐지 객체와 케이스 정보 추출하여 자세한 정보 표시
+                    objects_count = len(detections)
+                    case_types = set(det.get('case', 'unknown') for det in detections)
+                    
+                    # 현재 상황 요약 텍스트 구성
+                    if status == "detected":
+                        situation = "⚠️ 사건 감지 중"
+                        
+                        # 케이스 타입별로 다른 아이콘 추가
+                        if 'danger' in case_types:
+                            situation = "🔴 위험 상황 감지"
+                        elif 'illegal' in case_types:
+                            situation = "🟠 위법 행위 감지"
+                        elif 'emergency' in case_types:
+                            situation = "🟡 응급 상황 감지"
+                        
+                        # 자세한 탐지 목록 추가
+                        object_list = "\n".join(
+                            f"- {det.get('label', 'unknown')} ({det.get('case', 'unknown')})" 
+                            for det in detections
+                        )
+                        detection_text = f"{situation} ({objects_count})\n{object_list}"
+                    else:
+                        # 일반 대기 상태
+                        object_list = "\n".join(
+                            f"- {det.get('label', 'unknown')} ({det.get('case', 'unknown')})" 
+                            for det in detections
+                        )
+                        detection_text = f"객체 감지됨 ({objects_count})\n{object_list}"
+                        
                     self.monitoring_tab.update_status("detections", detection_text)
                 else:
-                    self.monitoring_tab.update_status("detections", "탐지된 객체 없음")
+                    if status == "detected":
+                        self.monitoring_tab.update_status("detections", "⚠️ 이벤트 감지 - 탐지 객체 정보 없음")
+                    else:
+                        self.monitoring_tab.update_status("detections", "탐지된 객체 없음")
             
             # robot_status가 "detected"이고 탐지 결과가 있으면 팝업창 표시
             if status == "detected" and json_data.get('detections'):
@@ -525,10 +556,18 @@ class MainWindow(QMainWindow):
             if DEBUG:
                 print(f"{DEBUG_TAG['ERR']} 상태 업데이트 실패: {e}")
 
-    def handle_detection_response(self, response):
+    def handle_detection_response(self, response, detection_data):
         """탐지 다이얼로그의 사용자 응답을 처리"""
         if DEBUG:
-            print(f"{DEBUG_TAG['DET']} 사용자 응답: {response}")
+            print(f"{DEBUG_TAG['DET']} 사용자 응답: {response}, 탐지정보: {detection_data}")
+        
+        # 피드백 메시지 표시
+        action_info = {
+            'response': response,
+            'case': detection_data.get('case', 'unknown'),
+            'label': detection_data.get('label', 'unknown')
+        }
+        self.monitoring_tab.show_feedback_message('dialog', action_info)
         
         # 응답이 "PROCEED"(진행)인 경우 응답 명령 버튼들 활성화하고 이동 버튼 비활성화
         if response == "PROCEED":

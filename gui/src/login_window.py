@@ -149,9 +149,17 @@ class LoginWindow(QMainWindow):
                     
                     QMessageBox.critical(self, "오류", f"메인 윈도우를 생성하는 중 오류가 발생했습니다:\n{e}")
             else:
+                # 실패 사유에 따른 메시지 구분
+                error_result = response_data.get("result", "unknown_error")
                 if DEBUG:
-                    print(f"{self.DEBUG_TAG['AUTH']} 인증 실패")
-                QMessageBox.warning(self, "로그인 실패", "아이디 또는 비밀번호가 올바르지 않습니다.")
+                    print(f"{self.DEBUG_TAG['AUTH']} 인증 실패: {error_result}")
+                
+                if error_result == "id_error":
+                    QMessageBox.warning(self, "로그인 실패", "존재하지 않는 아이디입니다.\n아이디를 확인해주세요.")
+                elif error_result == "password_error":
+                    QMessageBox.warning(self, "로그인 실패", "비밀번호가 일치하지 않습니다.\n비밀번호를 확인해주세요.")
+                else:
+                    QMessageBox.warning(self, "로그인 실패", f"알 수 없는 오류가 발생했습니다.\n다시 시도해주세요. (오류 코드: {error_result})")
 
         except Exception as e:
             if DEBUG:
