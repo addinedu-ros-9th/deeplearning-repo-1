@@ -61,7 +61,7 @@ class CaseLogsTab(QWidget):
             self.tableWidget.setColumnCount(15)
             self.tableWidget.setHorizontalHeaderLabels([
                 "case_id", "start_time", "end_time", "case_type", "detection_type", 
-                "robot_id", "location_id", "user_name", "is_ignored", "is_119_reported", 
+                "robot_id", "location_id", "user_id", "is_ignored", "is_119_reported", 
                 "is_112_reported", "is_illegal_warned", "is_danger_warned", 
                 "is_emergency_warned", "is_case_closed"
             ])
