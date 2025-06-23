@@ -133,7 +133,7 @@ class ImageManager(threading.Thread):
                 elif current_state == 'moving':
                     self._process_aruco_mode(header_json, image_binary)
 
-                elif current_state == 'patrolling':
+                elif current_state == 'patrolling' or current_state == 'detected':
                     self._process_patrolling_mode(data, header_json, image_binary)
 
             except socket.timeout:

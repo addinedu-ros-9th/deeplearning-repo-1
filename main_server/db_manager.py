@@ -1,120 +1,220 @@
-# main_server/db_manager.py (수정된 최종 버전)
+# main_server/db_manager.py (DB 스키마 동기화 최종 버전)
 
 import socket
 import threading
 import json
 import struct
 import mysql.connector
+from datetime import datetime
+
+# from shared.protocols import GET_LOGS 
+GET_LOGS = b'\x0c'
+
 
 class DBManager(threading.Thread):
-    """
-    GUI로부터의 TCP/IP 연결을 처리하고, 데이터베이스와 통신하여
-    사용자 인증(로그인) 및 기타 DB 관련 작업을 수행합니다.
-    """
     def __init__(self, host, port, db_config: dict):
         super().__init__()
+        self.name = "DBManager"
         self.host = host
         self.port = port
         self.db_config = db_config
         self.server_socket = None
         self.running = True
-        print(f"[DB Manager] 초기화. {host}:{port} 에서 GUI 연결을 대기합니다.")
+        print(f"[{self.name}] 초기화. {host}:{port} 에서 GUI 연결을 대기합니다.")
 
     def _get_connection(self):
-        """데이터베이스 커넥션을 생성합니다."""
         return mysql.connector.connect(**self.db_config)
 
+    # ======================================================================
+    # Section 1: 로그인 및 사용자 인증 관련 메서드
+    # ======================================================================
     def verify_user(self, user_id_from_gui: str, password: str) -> (bool, str):
-        """
-        사용자 ID와 비밀번호를 검증합니다.
-        성공 시 (True, 사용자 이름), 실패 시 (False, None)을 반환합니다.
-        """
         conn = None
         try:
             conn = self._get_connection()
-            
-            # [수정된 핵심]
-            # 1. WHERE 절에서 비교할 컬럼을 'user_name' -> 'user_account'로 변경합니다.
-            #    (GUI에서 입력한 ID는 user_account 컬럼의 값입니다.)
-            # 2. SELECT 절에서 가져올 사용자 이름 컬럼을 'name' -> 'user_name'으로 변경합니다.
             query = "SELECT password, user_name FROM user WHERE user_account = %s"
-            
             cursor = conn.cursor()
-            # 쿼리에 GUI로부터 받은 로그인 ID(user_id_from_gui)를 사용
             cursor.execute(query, (user_id_from_gui,))
             result = cursor.fetchone()
-            
-            # result[0]은 password, result[1]은 name
             if result and result[0] == password:
-                user_full_name = result[1] # '이승훈'과 같은 실명을 가져옴
-                print(f"[DB] '{user_id_from_gui}' ({user_full_name}) 인증 성공")
+                user_full_name = result[1]
+                print(f"[{self.name}] DB: '{user_id_from_gui}' ({user_full_name}) 인증 성공")
                 return True, user_full_name
-            
-            print(f"[DB] '{user_id_from_gui}' 인증 실패: ID 또는 비밀번호 불일치")
+            print(f"[{self.name}] DB: '{user_id_from_gui}' 인증 실패")
             return False, None
         except mysql.connector.Error as err:
-            print(f"[DB 오류] {err}")
+            print(f"[{self.name}] DB 오류 (사용자 인증): {err}")
             return False, None
         finally:
             if conn and conn.is_connected():
                 conn.close()
 
-    def handle_client(self, conn: socket.socket, addr):
-        """연결된 GUI 클라이언트의 요청을 처리하는 메소드"""
-        print(f"[DB Manager] GUI 클라이언트 연결됨: {addr}")
+    def _process_login_request(self, conn: socket.socket, request_data: dict):
+        is_success, user_name = self.verify_user(
+            request_data.get('user_id'), 
+            request_data.get('password')
+        )
+        response = {"user_name": user_name, "result": "succeed" if is_success else "fail"}
+        response_bytes = json.dumps(response).encode('utf-8')
+        header = struct.pack('>I', len(response_bytes))
+        conn.sendall(header + response_bytes)
+
+    # ======================================================================
+    # Section 2: 사건 로그 저장 관련 메서드 (✨✨✨ 핵심 수정 ✨✨✨)
+    # ======================================================================
+    def _generate_paths(self, detection_type: str, start_time_str: str) -> (str, str):
         try:
-            while self.running:
-                len_bytes = conn.recv(4)
-                if not len_bytes:
-                    break
+            dt_obj = datetime.fromisoformat(start_time_str.replace("+00:00", ""))
+            timestamp_str = dt_obj.strftime('%Y%m%d_%H%M%S')
+            image_path = f"images/{detection_type}_{timestamp_str}.jpg"
+            video_path = f"videos/{detection_type}_{timestamp_str}.mp4"
+            return image_path, video_path
+        except (ValueError, TypeError) as e:
+            print(f"[{self.name}] 시간 파싱 오류: {e}. 경로를 null로 설정합니다.")
+            return None, None
+
+    def _get_location_id(self, cursor, location_name: str) -> int:
+        if not location_name or location_name == 'unknown':
+            return None
+        try:
+            query = "SELECT id FROM location WHERE location_name = %s"
+            cursor.execute(query, (location_name,))
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                print(f"[{self.name}] 경고: location 테이블에 '{location_name}' 지역이 없습니다.")
+                return None
+        except mysql.connector.Error as err:
+            print(f"[{self.name}] DB 오류 (location_id 조회): {err}")
+            return None
+
+    def _process_case_log_insert(self, request_data: dict):
+        """사건 로그 저장 요청을 실제로 처리하는 메서드."""
+        conn = None
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            for log_entry in request_data.get('logs', []):
+                location_id = self._get_location_id(cursor, log_entry.get('location_id'))
                 
-                msg_len = struct.unpack('>I', len_bytes)[0]
+                # [핵심 수정 1] location_id가 NULL인데 DB에서 허용하지 않으므로, 이 로그는 건너뛰고 오류를 출력
+                if location_id is None:
+                    print(f"[{self.name}] 저장 실패: location_id가 유효하지 않아 로그(case_id: {log_entry.get('case_id')})를 저장할 수 없습니다. 'unknown' 값 확인 필요.")
+                    continue # 다음 로그로 넘어감
+
+                image_path, video_path = self._generate_paths(
+                    log_entry.get('detection_type'), 
+                    log_entry.get('start_time')
+                )
+                
+                # [핵심 수정 2] INSERT 쿼리를 실제 DB 스키마에 맞춤
+                # - 'id' 컬럼은 auto_increment이므로 쿼리에서 제외
+                # - 'is_illeal_warned' 컬럼명 오타 수정
+                query = """
+                    INSERT INTO case_log (
+                        case_type, detection_type, robot_id, location_id, user_account, 
+                        image_path, video_path, is_ignored, is_119_reported, is_112_reported, 
+                        is_illeal_warned, is_danger_warned, is_emergency_warned, is_case_closed, 
+                        start_time, end_time
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                log_data_tuple = (
+                    log_entry.get('case_type'), log_entry.get('detection_type'),
+                    log_entry.get('robot_id'), location_id, log_entry.get('user_account'), image_path, video_path,
+                    log_entry.get('is_ignored'), log_entry.get('is_119_reported'), log_entry.get('is_112_reported'),
+                    log_entry.get('is_illeal_warned'), log_entry.get('is_danger_warned'),
+                    log_entry.get('is_emergency_warned'), log_entry.get('is_case_closed'),
+                    log_entry.get('start_time'), log_entry.get('end_time')
+                )
+                cursor.execute(query, log_data_tuple)
+            
+            conn.commit()
+            print(f"[{self.name}] 성공: 사건 로그를 DB에 저장했습니다.")
+
+        except mysql.connector.Error as err:
+            print(f"[{self.name}] DB 오류 (사건 로그 저장): {err}")
+            if conn: conn.rollback()
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+
+    # (이하 나머지 코드는 이전과 동일하므로 생략하지 않고 모두 포함)
+    # ======================================================================
+    # Section 3: 로그 조회 관련 메서드
+    # ======================================================================
+    def _process_get_logs_request(self, conn: socket.socket):
+        print(f"[{self.name}] 로그 조회 요청 수신.")
+        db_conn = None
+        try:
+            db_conn = self._get_connection()
+            cursor = db_conn.cursor(dictionary=True)
+            query = "SELECT * FROM case_log ORDER BY start_time DESC"
+            cursor.execute(query)
+            logs = cursor.fetchall()
+            for row in logs:
+                for key in ['start_time', 'end_time']:
+                    if row.get(key) and isinstance(row[key], datetime):
+                        row[key] = row[key].isoformat()
+            response_data = {"logs": logs}
+            response_bytes = json.dumps(response_data, ensure_ascii=False).encode('utf-8')
+            header = struct.pack('>I', len(response_bytes))
+            conn.sendall(header + response_bytes)
+            print(f"[{self.name}] 성공: {len(logs)}개의 로그를 GUI로 전송했습니다.")
+        except mysql.connector.Error as err:
+            print(f"[{self.name}] DB 오류 (로그 조회): {err}")
+        finally:
+            if db_conn and db_conn.is_connected():
+                db_conn.close()
+
+    # ======================================================================
+    # Section 4: 메인 핸들러 및 스레드 실행
+    # ======================================================================
+    def handle_client(self, conn: socket.socket, addr):
+        print(f"[{self.name}] GUI 클라이언트 연결됨: {addr}")
+        try:
+            peek_data = conn.recv(4, socket.MSG_PEEK)
+            if not peek_data: return
+
+            if peek_data.startswith(b'CMD'):
+                cmd_data = conn.recv(1024)
+                command_code = cmd_data[3:4]
+                if command_code == GET_LOGS:
+                    self._process_get_logs_request(conn)
+            else:
+                header = conn.recv(4)
+                if not header: return
+                msg_len = struct.unpack('>I', header)[0]
                 data_bytes = conn.recv(msg_len)
                 request_data = json.loads(data_bytes.decode('utf-8'))
-                
-                print(f"[DB Manager] GUI로부터 수신: {request_data}")
+                print(f"[{self.name}] GUI로부터 수신 (JSON): {request_data}")
 
-                user_id = request_data.get('user_id')
-                password = request_data.get('password')
-
-                is_success, user_name = self.verify_user(user_id, password)
-
-                response = {
-                    "user_name": user_name, # 인터페이스 명세서에 따라 사용자 이름을 담아줌
-                    "result": "succeed" if is_success else "fail"
-                }
-                
-                response_bytes = json.dumps(response).encode('utf-8')
-                response_len = struct.pack('>I', len(response_bytes))
-                conn.sendall(response_len + response_bytes)
-
-        except (ConnectionResetError, struct.error):
-            # 클라이언트가 연결을 끊었을 때 발생하는 정상적인 오류일 수 있음
-            pass
-        except Exception as e:
-            print(f"[DB Manager] 클라이언트 처리 중 오류 발생: {e}")
+                if 'logs' in request_data:
+                    self._process_case_log_insert(request_data)
+                elif 'user_id' in request_data:
+                    self._process_login_request(conn, request_data)
+        except (ConnectionResetError, struct.error, json.JSONDecodeError) as e:
+            print(f"[{self.name}] 클라이언트({addr}) 처리 중 오류 또는 연결 종료: {e}")
         finally:
-            print(f"[DB Manager] GUI 클라이언트 연결 종료: {addr}")
+            print(f"[{self.name}] GUI 클라이언트 연결 종료: {addr}")
             conn.close()
 
     def run(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind((self.host, self.port))
         self.server_socket.listen(5)
-
         while self.running:
             try:
                 conn, addr = self.server_socket.accept()
-                client_thread = threading.Thread(target=self.handle_client, args=(conn, addr))
+                client_thread = threading.Thread(target=self.handle_client, args=(conn, addr), daemon=True)
                 client_thread.start()
             except socket.error:
-                break
-        
-        if self.server_socket:
-            self.server_socket.close()
-
+                if not self.running: break
+    
     def stop(self):
         self.running = False
         if self.server_socket:
             self.server_socket.close()
-        print("[DB Manager] 종료 신호 수신. 서버를 중지합니다.")
+        print(f"[{self.name}] 종료 요청 수신.")

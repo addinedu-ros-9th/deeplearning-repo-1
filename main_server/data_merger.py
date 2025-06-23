@@ -132,7 +132,7 @@ class DataMerger(threading.Thread):
 
                 # --- [✨ 핵심 수정] ---
                 # 'patrolling' 상태가 아닐 때만 타임아웃 로직을 적용합니다.
-                if current_state != 'patrolling':
+                if current_state not in ['patrolling', 'detected']:
                     timeout = timedelta(seconds=0.1) # idle, moving 상태의 타임아웃
                     now = datetime.now()
                     
