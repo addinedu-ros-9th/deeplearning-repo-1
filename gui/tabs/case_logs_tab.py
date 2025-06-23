@@ -98,6 +98,13 @@ class CaseLogsTab(QWidget):
             print(f"{DEBUG_TAG['RECV']} 로그 데이터 업데이트:")
             print(f"  - 로그 개수: {len(logs)}")
             
+            # 데이터 형식 확인을 위한 추가 디버그 출력
+            if logs and len(logs) > 0:
+                first_log = logs[0]
+                print(f"  - 첫 번째 로그 샘플:")
+                for key, value in first_log.items():
+                    print(f"    {key}: {value} (타입: {type(value).__name__})")
+            
         # 로그 데이터 저장
         self.logs = logs
         self.filtered_logs = logs.copy()  # 필터링 초기화
@@ -142,7 +149,9 @@ class CaseLogsTab(QWidget):
             # 위치 ID 콤보박스
             self.comboBox_location_id.clear()
             self.comboBox_location_id.addItem("모든 위치")
-            location_ids = sorted(set(log.get("location_id", "") for log in self.logs if log.get("location_id")))
+            location_ids = sorted(set(str(log.get("location_id", "")) for log in self.logs if log.get("location_id") is not None))
+            if DEBUG:
+                print(f"{DEBUG_TAG['INIT']} 위치 ID 목록: {location_ids}")
             self.comboBox_location_id.addItems(location_ids)
             
             # 사용자 계정 콤보박스 (김대인 포함 보장)

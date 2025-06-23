@@ -655,12 +655,18 @@ class MainWindow(QMainWindow):
             # 요청 데이터 생성
             request = b'CMD' + GET_LOGS + b'\n'
             
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 로그 요청 명령: {request.hex()}")
+            
             # DB 매니저에 소켓 연결
             db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             db_socket.connect((DB_MANAGER_HOST, DB_MANAGER_PORT))
             
             # 요청 전송
             db_socket.sendall(request)
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 로그 요청 전송 완료")
             
             # 응답 수신 - 4바이트 헤더(길이) 먼저 수신
             header = b''
@@ -694,6 +700,18 @@ class MainWindow(QMainWindow):
             if DEBUG:
                 print(f"{DEBUG_TAG['RECV']} DB 매니저로부터 로그 데이터 수신")
                 print(f"  - 로그 개수: {len(log_data.get('logs', []))}")
+                print(f"  - 전체 응답 길이: {len(response_str)} 바이트")
+                
+                # 응답 구조 확인을 위해 첫 번째 로그만 샘플로 출력
+                if log_data.get('logs') and len(log_data.get('logs')) > 0:
+                    sample_log = log_data.get('logs')[0]
+                    print(f"  - 로그 샘플 구조:")
+                    for key, value in sample_log.items():
+                        print(f"      {key}: {value} (타입: {type(value).__name__})")
+                        
+                # cmd 필드가 있는지도 확인
+                if 'cmd' in log_data:
+                    print(f"  - 응답 명령: {log_data.get('cmd')}")
             
             # 로그 데이터 반환
             return log_data.get('logs', [])
