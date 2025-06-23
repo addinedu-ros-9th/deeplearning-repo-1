@@ -471,10 +471,6 @@ class MonitoringTab(QWidget):
         self.streaming이 True일 때만 화면에 표시합니다.
         """
         try:
-            # 이미지 수신 시간 기록
-            current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            if DEBUG:
-                print(f"[이미지 수신] 카메라 피드 {current_time}")
             
             # 영상 데이터 유효성 검사 (항상 수행)
             if not image_data:
@@ -510,6 +506,11 @@ class MonitoringTab(QWidget):
             self.live_feed_label.setPixmap(scaled_pixmap)
             self.live_feed_label.setAlignment(Qt.AlignCenter)
             
+            # 이미지 수신 시간 기록 다 그리고 난 뒤
+            current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            if DEBUG:
+                print(f"[이미지 수신] 카메라 피드 {current_time}")
+
         except Exception as e:
             if DEBUG:
                 print(f"카메라 피드 업데이트 실패: {e}")

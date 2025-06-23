@@ -379,8 +379,9 @@ class MainWindow(QMainWindow):
     def handle_detection(self, json_data: dict, image_data: bytes):
         """탐지 데이터 처리"""
         try:
-            # 이미지 데이터 수신 시간 기록
-            current_time = datetime.now(timezone.utc).isoformat()
+            # 이미지 데이터 수신 시간 기록 (datetime는 클래스)
+            from datetime import datetime as dt
+            current_time = dt.now(timezone.utc).isoformat()
             if DEBUG:
                 print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신: {current_time}")
                 print(f"  [헤더 정보]")
