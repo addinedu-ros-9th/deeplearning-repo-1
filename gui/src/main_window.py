@@ -383,7 +383,7 @@ class MainWindow(QMainWindow):
                 print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신:")
                 print(f"  [헤더 정보]")
                 print(f"  - Frame ID: {json_data.get('frame_id')}")
-                print(f"  - 로봇 위치: {json_data.get('location', 'unknown')}")
+                print(f"  - 로봇 위치: {json_data.get('location_id', 'unknown')}")  # location_id로 변경
                 print(f"  - 로봇 상태: {json_data.get('robot_status', 'unknown')}")
                 
                 # 탐지 결과가 있는 경우만 출력
@@ -401,7 +401,7 @@ class MainWindow(QMainWindow):
 
             # 상태 및 위치 정보 추출
             status = json_data.get('robot_status', 'unknown')
-            location = json_data.get('location', 'unknown')
+            location = json_data.get('location_id', 'unknown')  # location_id로 변경
             frame_id = json_data.get('frame_id', 'unknown')
             
             # 상태가 고정되지 않은 경우에만 업데이트
@@ -438,6 +438,9 @@ class MainWindow(QMainWindow):
                     self.popup_active = True
                     self.status_frozen = True  # 상태 디스플레이 고정
                     self.current_detection = detection
+                    
+                    # 탐지 정보에 서버에서 받은 location_id 추가
+                    self.current_detection['location_id'] = json_data.get('location_id', 'unknown')
                     self.current_detection_image = image_data
                     
                     # 고정할 상태 정보 저장
@@ -458,6 +461,7 @@ class MainWindow(QMainWindow):
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
+                        print(f"{DEBUG_TAG['DET']} 탐지 위치 (location_id): {self.current_detection.get('location_id', 'unknown')}")
                         print(f"{DEBUG_TAG['DET']} 새 팝업 생성")
                         print(f"{DEBUG_TAG['DET']} 상태 표시 고정됨")
                         print(f"{DEBUG_TAG['DET']} 첫번째 탐지 정보:")
@@ -604,16 +608,11 @@ class MainWindow(QMainWindow):
         }
 
     def send_log_to_db_manager(self):
-        """DB 매니저에게 로그 전송
-        
-        "IGNORE" 또는 "CASE_CLOSED" 버튼 클릭 시 호출되어,
-        시작 시간(start_time)과 종료 시간(end_time)을 포함한 로그를 
-        DB 매니저에게 전송합니다.
-        """
+        """DB 매니저에게 로그 전송"""
         try:
-            # 현재 시간을 종료 시간으로 설정 (UTC 표준시, ISO 8601 형식)
+            # 현재 시간을 종료 시간으로 설정
             from datetime import datetime
-            end_time = datetime.utcnow().isoformat() + "Z"
+            end_time = datetime.utcnow().isoformat() + "+00:00"
             
             if not self.current_detection or not self.detection_start_time:
                 if DEBUG:
@@ -624,12 +623,18 @@ class MainWindow(QMainWindow):
             log_data = {
                 "logs": [
                     {
-                        "case_id": self.current_detection.get("case_id", 999),  # 기본값 6 (예시에서 사용된 값)
+                        # 'case_id'는 DB에서 auto_increment로 자동 생성되므로, 여기서 보내는 값은 큰 의미가 없습니다.
+                        "case_id": 0,
                         "case_type": self.current_detection.get("case", "unknown"),
                         "detection_type": self.current_detection.get("label", "unknown"),
                         "robot_id": "ROBOT001",  # 로봇 ID
-                        "location_id": self.current_detection.get("location_id", self.current_detection.get("location", "unknown")),
-                        "user_id": self.user_id if self.user_id else "user",  # 사용자 ID 사용
+
+                        # ✨ [핵심 수정] ✨
+                        # 잘못된 위치('self.current_detection')가 아닌,
+                        # 팝업이 뜰 때 저장해 둔 올바른 위치('self.frozen_status') 정보를 사용합니다.
+                        "location_id": self.frozen_status.get("robot_location", "unknown"),
+                        
+                        "user_id": self.user_id if self.user_id else "user",
                         "is_ignored": self.response_actions["is_ignored"],
                         "is_119_reported": self.response_actions["is_119_reported"],
                         "is_112_reported": self.response_actions["is_112_reported"],
@@ -637,27 +642,27 @@ class MainWindow(QMainWindow):
                         "is_danger_warned": self.response_actions["is_danger_warned"],
                         "is_emergency_warned": self.response_actions["is_emergency_warned"],
                         "is_case_closed": self.response_actions["is_case_closed"],
-                        "start_time": self.detection_start_time,  # 탐지 시작 시간 (handle_detection에서 설정)
-                        "end_time": end_time  # 사용자 대응 종료 시간 (현재 시각)
+                        "start_time": self.detection_start_time,
+                        "end_time": end_time
                     }
                 ]
             }
             
             # JSON 직렬화
             import json
-            body = json.dumps(log_data).encode('utf-8') + b'\n'
+            body = json.dumps(log_data).encode('utf-8')
             
             # 헤더 생성 (4바이트 길이)
             header = len(body).to_bytes(4, 'big')
             
-            # 패킷 조립 (4바이트 헤더 + JSON)
+            # 패킷 조립
             packet = header + body
             
             if DEBUG:
                 print(f"{DEBUG_TAG['SEND']} DB 매니저에 로그 전송:")
                 print(f"  - 헤더 크기: {int.from_bytes(header, 'big')} 바이트")
-                print(f"  - 로그 내용: {json.dumps(log_data, indent=2)}")
-                print(f"  - JSON 패킷: {body[:100]}...")
+                print(f"  - 로그 내용: {log_data}")
+                print(f"  - 위치 정보(frozen_status): {self.frozen_status.get('robot_location')}")
                 
             # DB 매니저에 소켓 연결 및 데이터 전송
             db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
