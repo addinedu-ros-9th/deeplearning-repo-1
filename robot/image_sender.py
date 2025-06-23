@@ -37,7 +37,7 @@ def can_ping(ip: str, timeout=1):
 local_ip = get_local_ip()
 print(f"📡 현재 송신기 IP: {local_ip}")
 
-if not local_ip.startswith("192.168.45."):
+if not local_ip.startswith("192.168.0."):
     print(f"❌ 의도한 공유기에 연결되어 있지 않습니다. 현재 IP: {local_ip}")
     sys.exit(1)
 
