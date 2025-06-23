@@ -223,7 +223,7 @@ class MainWindow(QMainWindow):
         """UI 초기화"""
         try:
             # 기본 UI 로드
-            loadUi('./gui/ui/main_window.ui', self)
+            loadUi('./gui/ui/main_window2.ui', self)
             
             # 윈도우 크기 설정
             # self.setMinimumSize(1024, 768)  # 최소 크기 설정
