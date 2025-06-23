@@ -133,8 +133,8 @@ class DetectionManager:
                 frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
                 # 시각화 (추가 코드)
-                cv2.imshow("UDP Frame", frame)
-                cv2.waitKey(1)
+                # cv2.imshow("UDP Frame", frame)
+                # cv2.waitKey(1)
 
                 # YOLO 예측
                 yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes)
@@ -155,7 +155,7 @@ class DetectionManager:
                 # 큐에 병합 결과 추가
                 self.send_queue.put(merged_result)
                 print("-----------------------------------------------------")
-                print(f"[✅ 수신] 1. Robot → ImageManager: frame_id={frame_id}, timestamp={timestamp}, all_size={len(data)} bytes")
+                print(f"[✅ 수신] 1. ImageManager → Dectection_manager: frame_id={frame_id}, timestamp={timestamp}, all_size={len(data)} bytes")
                 # print(f"[UDP 수신] frame_id={frame_id}, 객체={len(response['detections'])}건", flush=True)
 
             except Exception as e:

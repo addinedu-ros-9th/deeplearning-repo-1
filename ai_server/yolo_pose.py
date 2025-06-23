@@ -52,13 +52,16 @@ class YOLOPoseDetector:
             for r in results:
                 boxes = r.boxes
                 for i in range(len(boxes)):
+                    box = boxes[i]
                     conf = float(box.conf[0].item())
                     if conf < conf_thresh:
                             continue  # 필터링
                     
-                    box = boxes[i]
+                    
                     cls_id = int(box.cls[0].item())
                     label = self.names[cls_id]  # 예: 'fall', 'stand', 'sit'
+                    if label not in ["lying_down", "fall_down"]:
+                        continue  # 이외의 포즈는 무시
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
 
                     detections.append({
