@@ -76,12 +76,19 @@ class MonitoringTab(QWidget):
         self.init_map()
         self.init_robot()
         
+        # 로그인 시 바로 버튼 활성화 및 로봇 상태 표시
+        self.system_ready = True  # 항상 시스템이 준비된 상태로 설정
+        
         # 상태별 메시지 정의
         self.STATUS_MESSAGES = {
             'idle': '대기 중',
             'moving': '이동 중',
             'patrolling': '순찰 중'
         }
+        
+        # 초기 상태 설정
+        self.robot_status_label.setText("로봇 상태: 순찰 중")
+        self.enable_movement_buttons()
 
     def init_ui(self):
         """UI 초기화"""
@@ -108,10 +115,11 @@ class MonitoringTab(QWidget):
             self.btn_return_base = self.findChild(QPushButton, "btn_return_to_base")
             self.btn_start_video_stream = self.findChild(QPushButton, "btn_start_video_stream")
 
-            # 이동 버튼들 초기 비활성화
-            self.btn_move_to_a.setEnabled(False)
-            self.btn_move_to_b.setEnabled(False)
-            self.btn_return_base.setEnabled(False)
+            # 이동 버튼들 기본 설정 - BASE 위치 가정하여 설정
+            # 로그인하면 바로 활성화되도록 변경
+            self.btn_move_to_a.setEnabled(True)
+            self.btn_move_to_b.setEnabled(True)
+            self.btn_return_base.setEnabled(False)  # BASE 위치에서는 기지 복귀 버튼 비활성화
 
             self.btn_move_to_a.clicked.connect(self.send_move_to_a_command)
             self.btn_move_to_b.clicked.connect(self.send_move_to_b_command)
@@ -358,9 +366,8 @@ class MonitoringTab(QWidget):
         - A 위치: B, BASE 버튼만 활성화
         - B 위치: A, BASE 버튼만 활성화
         """
-        # Start Video Stream 버튼을 눌렀을 때 항상 버튼이 활성화되도록 변경
-        # system_ready는 스트림 시작 버튼을 클릭하면 True가 됨
-        self.system_ready = True
+        # 로그인하면 바로 버튼이 활성화되도록 변경
+        # system_ready 값과 무관하게 항상 버튼 활성화
         
         # 현재 위치에 따라 버튼 활성화
         if self.current_location == 'BASE':
@@ -842,13 +849,16 @@ class MonitoringTab(QWidget):
         # 기본 명령 전송 처리
         self.handle_command_button("CASE_CLOSED")
         
-        # 추가로 모든 버튼 상태 초기화
-        if self.command_buttons_state and self.command_buttons_state["button"]:
-            button = self.command_buttons_state["button"]
-            original_style = self.command_buttons_state["original_style"]
-            
-            # 버튼 색상 원복
-            button.setStyleSheet(original_style)
+        # 모든 응답 명령 버튼 스타일 초기화
+        self.btn_fire_report.setStyleSheet("")
+        self.btn_police_report.setStyleSheet("")
+        self.btn_illegal_warning.setStyleSheet("")
+        self.btn_danger_warning.setStyleSheet("")
+        self.btn_emergency_warning.setStyleSheet("")
+        self.btn_case_closed.setStyleSheet("")
+        
+        # 명령 버튼 상태 초기화
+        self.command_buttons_state = None
         
         # 버튼 비활성화
         self.set_response_buttons_enabled(False)
@@ -1057,10 +1067,11 @@ class MonitoringTab(QWidget):
                 x = 50  # Live 텍스트 길이 + 여백
                 y = 0  # 제목 높이의 중앙
                 
-                self.recording_indicator.setGeometry(x, y, 80, title_height)
+                # 넓이 증가 (80 -> 120)
+                self.recording_indicator.setGeometry(x, y, 120, title_height)
                 
-                # 텍스트 스타일 설정
-                self.recording_indicator.setStyleSheet("color: red; font-weight: bold;")
+                # 텍스트 스타일 설정 - 글씨 크기 약간 축소하고 볼드체 유지
+                self.recording_indicator.setStyleSheet("color: red; font-weight: bold; font-size: 10pt;")
                 self.recording_indicator.setText("● Recording")
                 self.recording_indicator.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 self.recording_indicator.setToolTip("녹화중")
