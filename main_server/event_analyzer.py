@@ -15,8 +15,8 @@ class EventAnalyzer(threading.Thread):
     CASE_MAPPING = {
         'knife': 'danger',
         'gun': 'danger',
-        'fall_down': 'danger',
-        'cigarette': 'illegality'
+        'lying_down': 'emergency',
+        'cigarette': 'illegal'
     }
 
     def __init__(self, listen_port, output_queue, robot_status):

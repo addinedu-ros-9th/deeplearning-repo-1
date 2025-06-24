@@ -90,7 +90,7 @@ class DBManager(threading.Thread):
         print(f"[✈️ TCP 전송] {self.name} -> GUI: 로그인 응답: {response}")
         conn.sendall(header + response_bytes)
 
-    def _verify_user(self, user_id: str, password: str) -> (bool, str):
+    def _verify_user(self, user_id: str, password: str) -> tuple[bool, str]:
         conn = None
         try:
             conn = self._get_connection()
@@ -111,7 +111,7 @@ class DBManager(threading.Thread):
             if conn and conn.is_connected():
                 conn.close()
 
-    def _generate_paths(self, detection_type: str, start_time_str: str) -> (str, str):
+    def _generate_paths(self, detection_type: str, start_time_str: str) -> tuple[str, str]:
         try:
             dt_obj = datetime.fromisoformat(start_time_str.replace("+00:00", ""))
             timestamp_str = dt_obj.strftime('%Y%m%d_%H%M%S')
