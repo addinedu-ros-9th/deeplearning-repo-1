@@ -372,9 +372,24 @@ class MainWindow(QMainWindow):
         """
         if DEBUG:
             print(f"{DEBUG_TAG['IMG']} 시스템 초기 활성화: {start}")
+        
+        # Start Video Stream 버튼이 처음 클릭되었을 때, 이동 버튼도 활성화 되도록 처리
+        if start:
+            # 현재 위치에 따른 이동 버튼 활성화
+            current_location = self.monitoring_tab.current_location
+            robot_status = json_data.get('robot_status', 'patrolling') if 'json_data' in locals() else 'patrolling'
             
-        # 첫 시작 시 시스템 활성화를 위한 코드를 추가할 수 있음 (필요한 경우)
-        # 현재는 구현 필요 없음 - 항상 백그라운드에서 수신 중
+            if DEBUG:
+                print(f"{DEBUG_TAG['IMG']} 스트리밍 시작: 이동 버튼 활성화 (위치: {current_location}, 상태: {robot_status})")
+            
+            # 이동 중이 아니면 현재 위치에 맞게 이동 버튼 활성화
+            if robot_status != 'moving':
+                self.monitoring_tab.enable_movement_buttons()
+                
+            # 상태 표시도 업데이트 
+            if not self.status_frozen:
+                self.monitoring_tab.update_status("robot_status", robot_status)
+                self.monitoring_tab.update_status("robot_location", current_location)
 
     def handle_detection(self, json_data: dict, image_data: bytes):
         """탐지 데이터 처리"""

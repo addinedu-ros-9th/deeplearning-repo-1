@@ -358,25 +358,29 @@ class MonitoringTab(QWidget):
         - A 위치: B, BASE 버튼만 활성화
         - B 위치: A, BASE 버튼만 활성화
         """
-        if self.system_ready:  # 시스템이 활성화된 경우에만 (스트리밍 표시 여부와 무관)
-            if self.current_location == 'BASE':
-                self.btn_move_to_a.setEnabled(True)
-                self.btn_move_to_b.setEnabled(True)
-                self.btn_return_base.setEnabled(False)
-                if DEBUG:
-                    print("BASE 위치: A, B 버튼 활성화")
-            elif self.current_location == 'A':
-                self.btn_move_to_a.setEnabled(False)  # A에 있을 때는 A로 이동 불가
-                self.btn_move_to_b.setEnabled(True)
-                self.btn_return_base.setEnabled(True)
-                if DEBUG:
-                    print("A 위치: B, BASE 버튼 활성화")
-            elif self.current_location == 'B':
-                self.btn_move_to_a.setEnabled(True)
-                self.btn_move_to_b.setEnabled(False)  # B에 있을 때는 B로 이동 불가
-                self.btn_return_base.setEnabled(True)
-                if DEBUG:
-                    print("B 위치: A, BASE 버튼 활성화")
+        # Start Video Stream 버튼을 눌렀을 때 항상 버튼이 활성화되도록 변경
+        # system_ready는 스트림 시작 버튼을 클릭하면 True가 됨
+        self.system_ready = True
+        
+        # 현재 위치에 따라 버튼 활성화
+        if self.current_location == 'BASE':
+            self.btn_move_to_a.setEnabled(True)
+            self.btn_move_to_b.setEnabled(True)
+            self.btn_return_base.setEnabled(False)
+            if DEBUG:
+                print("BASE 위치: A, B 버튼 활성화")
+        elif self.current_location == 'A':
+            self.btn_move_to_a.setEnabled(False)  # A에 있을 때는 A로 이동 불가
+            self.btn_move_to_b.setEnabled(True)
+            self.btn_return_base.setEnabled(True)
+            if DEBUG:
+                print("A 위치: B, BASE 버튼 활성화")
+        elif self.current_location == 'B':
+            self.btn_move_to_a.setEnabled(True)
+            self.btn_move_to_b.setEnabled(False)  # B에 있을 때는 B로 이동 불가
+            self.btn_return_base.setEnabled(True)
+            if DEBUG:
+                print("B 위치: A, BASE 버튼 활성화")
 
     def update_robot_status(self, status: str):
         """로봇 상태 업데이트"""
@@ -446,7 +450,10 @@ class MonitoringTab(QWidget):
                 # 영상 피드 초기화 (접두사 추가)
                 self.live_feed_label.setText("비디오 상태: 스트리밍 시작 중...")
                 
-                # 현재 위치에 따라 이동 버튼 활성화 (최초 1회만)
+                # 로봇 상태 라벨 업데이트 - 시작 버튼을 눌러서 활성화 후
+                self.robot_status_label.setText("로봇 상태: 순찰 중")  # 기본값은 순찰 중으로 설정
+                
+                # 현재 위치에 따라 이동 버튼 항상 활성화 (system_ready 값과 무관)
                 self.enable_movement_buttons()
                 
                 if DEBUG:
@@ -461,8 +468,12 @@ class MonitoringTab(QWidget):
                     # 영상 표시 활성화
                     self.btn_start_video_stream.setText("Stop Video Stream")
                     self.live_feed_label.setText("비디오 상태: 스트리밍 활성화됨")
+                    
+                    # 이동 버튼 상태 갱신 (streaming 상태와 무관하게 항상 활성화)
+                    self.enable_movement_buttons()
+                    
                     if DEBUG:
-                        print("비디오 스트림 표시 활성화")
+                        print("비디오 스트림 표시 활성화 및 이동 버튼 재활성화")
                 else:
                     # 영상 표시 비활성화 (백그라운드 수신은 계속)
                     self.btn_start_video_stream.setText("Start Video Stream")
@@ -579,15 +590,19 @@ class MonitoringTab(QWidget):
                 formatted_msg = f"연결 상태: {message}"
                 self.connectivity_label.setText(formatted_msg)
             elif status_type == "robot_status":
-                # 로봇 상태만 업데이트
-                # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
-                if not self.system_ready:
-                    self.robot_status_label.setText("로봇 상태: 비활성화 - 시작 버튼을 눌러주세요")
-                    return
-                
-                # 로봇 상태 업데이트
+                # 로봇 상태 업데이트 - 항상 표시
                 formatted_msg = f"로봇 상태: {message}"
                 self.robot_status_label.setText(formatted_msg)
+                
+                # Start Video Stream 버튼을 클릭하면 system_ready가 True로 설정됨
+                # 로봇 상태가 업데이트되면 system_ready를 자동으로 True로 설정하여 이동 버튼이 활성화되도록 함
+                if not self.system_ready:
+                    self.system_ready = True
+                    self.enable_movement_buttons()
+                    if DEBUG:
+                        print(f"로봇 상태 업데이트로 인해 system_ready가 활성화되고 이동 버튼이 활성화됨 (상태: {message})")
+                
+                # 로봇의 움직임 상태를 업데이트 (이동 버튼 활성화/비활성화 처리 등에 사용됨)
                 self.update_robot_status(message)
                 
                 # detected 상태면 녹화중 표시
@@ -597,15 +612,17 @@ class MonitoringTab(QWidget):
                     self.show_recording_indicator(False)
                 
             elif status_type == "robot_location":
-                # 로봇 위치만 업데이트
-                # 시스템이 준비되지 않은 경우
-                if not self.system_ready:
-                    self.robot_location_label.setText("로봇 위치: 대기 중")
-                    return
-                
-                # 로봇 위치 업데이트
+                # 로봇 위치 업데이트 - 항상 표시
                 formatted_msg = f"로봇 위치: {message}"
                 self.robot_location_label.setText(formatted_msg)
+                
+                # Start Video Stream 버튼을 클릭하면 system_ready가 True로 설정됨
+                # 로봇 위치가 업데이트되면 system_ready를 자동으로 True로 설정하여 이동 버튼이 활성화되도록 함
+                if not self.system_ready:
+                    self.system_ready = True
+                    self.enable_movement_buttons()
+                    if DEBUG:
+                        print(f"로봇 위치 업데이트로 인해 system_ready가 활성화되고 이동 버튼이 활성화됨 (위치: {message})")
                 
                 # 위치 정보 처리 
                 actual_location, is_moving, destination = self.parse_location(message)
