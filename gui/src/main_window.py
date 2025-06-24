@@ -27,6 +27,10 @@ DEBUG_TAG = {
     'ERR': '[오류]'
 }
 
+# 한국 시간대(타임존) 설정 - 전역 변수
+# 한국 표준시(KST)는 UTC+9 입니다
+KOREA_TIMEZONE = timezone(timedelta(hours=9))  # UTC+9 (한국 표준시, KST)
+
 # 서버 설정
 SERVER_IP = "127.0.0.1"  # localhost
 GUI_MERGER_PORT = 9004       # data_merger 통신 포트
@@ -517,10 +521,9 @@ class MainWindow(QMainWindow):
                     )
                     self.frozen_status["detections"] = detection_text
                     
-                    # 탐지 시작 시간 저장 (한국 시간, UTC+9)
-                    from datetime import datetime, timezone, timedelta
-                    korea_timezone = timezone(timedelta(hours=9))  # UTC+9 (한국 시간)
-                    self.detection_start_time = datetime.now(korea_timezone).isoformat()
+                    # 탐지 시작 시간 저장 (한국 표준시, KST 사용)
+                    # 전역변수 KOREA_TIMEZONE 사용하여 한글로 시간 저장
+                    self.detection_start_time = datetime.now(KOREA_TIMEZONE).isoformat()
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
@@ -706,26 +709,26 @@ class MainWindow(QMainWindow):
     def send_log_to_db_manager(self):
         """DB 매니저에게 로그 전송"""
         try:
-            # 현재 시간을 종료 시간으로 설정 (한국 시간, UTC+9)
-            from datetime import datetime, timezone, timedelta
-            korea_timezone = timezone(timedelta(hours=9))  # UTC+9 (한국 시간)
-            end_time = datetime.now(korea_timezone).isoformat()
+            # 현재 시간을 종료 시간으로 설정 (한국 표준시, KST)
+            # 전역변수 KOREA_TIMEZONE 사용
+            end_time = datetime.now(KOREA_TIMEZONE).isoformat()  # 한국 시간으로 현재 시각 기록
             
             if not self.current_detection or not self.detection_start_time:
                 if DEBUG:
                     print(f"{DEBUG_TAG['ERR']} 로그 전송 실패: 탐지 정보 없음")
                 return
                 
-            # 로그 데이터 구성 (필드 순서 변경 및 user name을 robot_id로 사용)
+            # 로그 데이터 구성 (한국어 주석: 한국시간으로 모든 시간정보 기록)
             log_data = {
                 "logs": [
                     {
-                        # 'case_id'는 DB에서 auto_increment로 자동 생성
+                        # 'case_id'는 DB에서 auto_increment로 자동 생성됨
                         "case_id": 0,
                         "case_type": self.current_detection.get("case", "unknown"),
                         "detection_type": self.current_detection.get("label", "unknown"),
-                        "robot_id": "ROBOT001",
-                        "user_id": self.user_name if self.user_name else "user_name_unknow",  # 기존 user_name 유지
+                        # 사용자 이름을 robot_id로 사용 (기본값: 김민수)
+                        "robot_id": self.user_name if self.user_name else "unknown_user",
+                        "user_id": self.user_id if self.user_id else "user_name_unknow",  # 사용자 ID 저장
                         "location": self.frozen_status.get("robot_location") or self.current_detection.get("location") or "A",
                         "is_ignored": self.response_actions["is_ignored"],
                         "is_119_reported": self.response_actions["is_119_reported"],
@@ -734,8 +737,9 @@ class MainWindow(QMainWindow):
                         "is_danger_warned": self.response_actions["is_danger_warned"],
                         "is_emergency_warned": self.response_actions["is_emergency_warned"],
                         "is_case_closed": self.response_actions["is_case_closed"],
-                        "start_time": self.detection_start_time,
-                        "end_time": end_time
+                        # 한국 시간대(KST)로 기록된 시간 정보
+                        "start_time": self.detection_start_time,  # 탐지 시작 시간 (한국 시간)
+                        "end_time": end_time  # 사건 종료 시간 (한국 시간)
                     }
                 ]
             }
@@ -757,6 +761,10 @@ class MainWindow(QMainWindow):
                 print(f"  - 위치 정보(frozen_status): {self.frozen_status.get('robot_location')}")
                 print(f"  - 위치 정보(current_detection): {self.current_detection.get('location')}")
                 print(f"  - 최종 사용된 location: {log_data['logs'][0]['location']}")
+                print(f"  - 사용자 이름(robot_id): {log_data['logs'][0]['robot_id']}")
+                print(f"  - 한국 시간 정보:")
+                print(f"    - 탐지 시작: {log_data['logs'][0]['start_time']}")
+                print(f"    - 사건 종료: {log_data['logs'][0]['end_time']}")
                 print(f"  - 사용자 이름(robot_id): {log_data['logs'][0]['robot_id']}")
                 print(f"  - 시작 시간(한국): {log_data['logs'][0]['start_time']}")
                 print(f"  - 종료 시간(한국): {log_data['logs'][0]['end_time']}")
