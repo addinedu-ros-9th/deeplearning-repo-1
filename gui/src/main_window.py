@@ -634,11 +634,15 @@ class MainWindow(QMainWindow):
             self.popup_active = False
             self.status_frozen = False
             
+            # 로봇 상태를 patrolling으로 명시적 변경 (CASE_CLOSED와 동일하게)
+            self.frozen_status["robot_status"] = "patrolling"
+            
             # 로봇 이동 버튼 다시 활성화
             self.monitoring_tab.enable_movement_buttons()
             
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨 (무시 처리)")
+                print(f"{DEBUG_TAG['DET']} frozen_status 업데이트됨 (robot_status: patrolling)")
                 print(f"{DEBUG_TAG['DET']} 로봇 이동 버튼 재활성화")
 
     def update_response_action(self, action_type):
