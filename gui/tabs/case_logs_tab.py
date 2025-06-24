@@ -55,7 +55,7 @@ class CaseLogsTab(QWidget):
         """UI 초기화"""
         try:
             # UI 파일 로드
-            loadUi("gui/ui/case_logs_tap.ui", self)
+            loadUi("gui/ui/case_logs_tap2.ui", self)
             
             # 테이블 설정
             self.tableWidget.setColumnCount(15)
@@ -127,19 +127,19 @@ class CaseLogsTab(QWidget):
                 
             # 케이스 타입 콤보박스
             self.comboBox_case_type.clear()
-            self.comboBox_case_type.addItem("모든 케이스 타입")
+            self.comboBox_case_type.addItem("All Case Types")
             case_types = sorted(set(log.get("case_type", "") for log in self.logs if log.get("case_type")))
             self.comboBox_case_type.addItems(case_types)
             
             # 탐지 타입 콤보박스
             self.comboBox_detection_type.clear()
-            self.comboBox_detection_type.addItem("모든 탐지 타입")
+            self.comboBox_detection_type.addItem("All Detection Types")
             detection_types = sorted(set(log.get("detection_type", "") for log in self.logs if log.get("detection_type")))
             self.comboBox_detection_type.addItems(detection_types)
             
             # 로봇 ID 콤보박스 (ROBOT001 포함 보장)
             self.comboBox_robot_id.clear()
-            self.comboBox_robot_id.addItem("모든 로봇")
+            self.comboBox_robot_id.addItem("All Robots")
             robot_ids = sorted(set(log.get("robot_id", "") for log in self.logs if log.get("robot_id")))
             if "ROBOT001" not in robot_ids:
                 robot_ids.append("ROBOT001")
@@ -148,7 +148,7 @@ class CaseLogsTab(QWidget):
             
             # 위치 ID 콤보박스
             self.comboBox_location_id.clear()
-            self.comboBox_location_id.addItem("모든 위치")
+            self.comboBox_location_id.addItem("All Locations")
             location_ids = sorted(set(str(log.get("location_id", "")) for log in self.logs if log.get("location_id") is not None))
             if DEBUG:
                 print(f"{DEBUG_TAG['INIT']} 위치 ID 목록: {location_ids}")
@@ -156,7 +156,7 @@ class CaseLogsTab(QWidget):
             
             # 사용자 계정 콤보박스 (김대인 포함 보장)
             self.comboBox_user_account.clear()
-            self.comboBox_user_account.addItem("모든 사용자")
+            self.comboBox_user_account.addItem("All Users")
             user_names = sorted(set(log.get("user_name", "") for log in self.logs if log.get("user_name")))
             if "김대인" not in user_names:
                 user_names.append("김대인")
@@ -165,7 +165,7 @@ class CaseLogsTab(QWidget):
             
             # 액션 타입 콤보박스
             self.comboBox_action_type.clear()
-            self.comboBox_action_type.addItem("모든 액션")
+            self.comboBox_action_type.addItem("All Actions")
             action_types = [
                 "119_report", "112_report", "case_closed", 
                 "danger_warning", "emergency_warning", "illegal_warning"
@@ -237,7 +237,7 @@ class CaseLogsTab(QWidget):
                 self.tableWidget.setItem(row, 14, QTableWidgetItem(is_case_closed))
                 
             # 로그 수 표시 업데이트
-            self.label_number_of_log.setText(f"로그 수: {len(self.filtered_logs)}")
+            self.label_number_of_log.setText(f"Number of Logs: {len(self.filtered_logs)}")
             
             if DEBUG:
                 print(f"{DEBUG_TAG['FILTER']} 로그 테이블 업데이트 완료 (총 {len(self.filtered_logs)}개)")

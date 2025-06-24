@@ -6,7 +6,7 @@ import traceback
 from datetime import datetime, timedelta, timezone
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.uic import loadUi
 from gui.tabs.monitoring_tab import MonitoringTab
 from gui.tabs.case_logs_tab import CaseLogsTab
@@ -531,7 +531,7 @@ class MainWindow(QMainWindow):
                     self.reset_response_actions()
                     
                     # 팝업 다이얼로그 생성 및 표시
-                    dialog = DetectionDialog(self, detection, image_data)
+                    dialog = DetectionDialog(self, detection, image_data, self.user_name)
                     dialog.response_signal.connect(self.handle_detection_response)
                     dialog.setWindowModality(Qt.ApplicationModal)  # 다이얼로그가 닫힐 때까지 다른 창 조작 불가
                     dialog.show()
@@ -569,6 +569,20 @@ class MainWindow(QMainWindow):
             'label': detection_data.get('label', 'unknown')
         }
         self.monitoring_tab.show_feedback_message('dialog', action_info)
+        
+        # 팝업 알림 표시
+        popup = QMessageBox(self)
+        popup.setWindowTitle("응답 처리")
+        if response == "PROCEED":
+            popup.setText(f"상황을 진행합니다.\n적절한 대응 명령을 선택하세요.")
+        else:  # "IGNORE"
+            popup.setText(f"상황을 무시합니다.\n계속 모니터링을 진행합니다.")
+        popup.setStandardButtons(QMessageBox.Ok)
+        popup.setWindowModality(Qt.NonModal)  # 모달리스 팝업
+        popup.show()
+        
+        # 2초 후 자동으로 닫히도록 설정
+        QTimer.singleShot(2000, popup.accept)
         
         # 응답이 "PROCEED"(진행)인 경우 응답 명령 버튼들 활성화하고 이동 버튼 비활성화
         if response == "PROCEED":
@@ -629,9 +643,8 @@ class MainWindow(QMainWindow):
         elif action_type == "EMERGENCY_WARNING":
             self.response_actions["is_emergency_warned"] = 1
         elif action_type == "CASE_CLOSED":
+            # 사건 종료 시 DB에 로그 전송
             self.response_actions["is_case_closed"] = 1
-            
-            # 케이스 종료 시 DB에 로그 전송
             self.send_log_to_db_manager()
             
             # 케이스 종료 시 이동 버튼 다시 활성화 (현재 위치에 맞게)
@@ -643,8 +656,13 @@ class MainWindow(QMainWindow):
             self.popup_active = False
             self.status_frozen = False
             
+            # 상태 변경 후 frozen_status 업데이트 - 이것이 핵심 수정 부분
+            # 최신 정보를 frozen_status에 업데이트하여 탭 전환 시 이전 상태로 돌아가지 않도록 함
+            self.frozen_status["robot_status"] = "patrolling"  # 사건 종료 후 상태는 patrolling으로 설정
+            
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨 (사건 종료)")
+                print(f"{DEBUG_TAG['DET']} frozen_status 업데이트됨 (robot_status: patrolling)")
         
         if DEBUG:
             print(f"{DEBUG_TAG['DET']} 대응 액션 업데이트: {action_type}")
@@ -863,26 +881,40 @@ class MainWindow(QMainWindow):
             if DEBUG:
                 print(f"{DEBUG_TAG['INIT']} 탭 변경됨: {index}")
             
-            # 현재 탭이 모니터링 탭이 아닐 경우
-            if index != 0:
-                # 상태 표시 고정
-                self.status_frozen = True
+            # 현재 탭 객체 획득 (어떤 탭인지 확인용)
+            current_tab = self.tabWidget.widget(index)
+            
+            # 탭이 Case Logs 탭인지 확인
+            is_case_logs_tab = (current_tab == self.case_logs_tab)
+            
+            if is_case_logs_tab:
+                # Case Logs 탭으로 이동한 경우 - frozen_status와 무관하게 독립적으로 로그 데이터만 갱신
                 if DEBUG:
-                    print(f"{DEBUG_TAG['INIT']} 상태 표시 고정됨")
-                    
-                # 로그 탭으로 이동한 경우 로그 데이터 갱신
-                # 탭 인덱스가 아닌 실제 위젯 객체를 비교하여 Case Logs 탭 여부 확인
-                current_tab = self.tabWidget.widget(index)
-                if current_tab == self.case_logs_tab:
+                    print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청 (frozen_status 영향 없음)")
+                logs = self.fetch_logs()
+                self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
+            elif index != 0:
+                # 모니터링 탭이 아닌 다른 탭으로 이동(설정 탭 등)
+                # 상태 표시 고정 (단, 사건이 진행 중인 경우만 - popup_active가 True인 경우)
+                if self.popup_active:
+                    self.status_frozen = True
                     if DEBUG:
-                        print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청")
-                    logs = self.fetch_logs()
-                    self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
-            else:
-                # 모니터링 탭으로 돌아온 경우 - 고정된 상태 복원
-                self.restore_frozen_status_display()
-                if DEBUG:
-                    print(f"{DEBUG_TAG['INIT']} 메인 모니터링 탭 활성화, 고정 상태 복원")
+                        print(f"{DEBUG_TAG['INIT']} 상태 표시 고정됨 (진행 중인 사건이 있음)")
+                else:
+                    # 진행 중인 사건이 없으면 frozen 상태가 되지 않도록 함
+                    self.status_frozen = False
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['INIT']} 상태 표시 유지됨 (진행 중인 사건 없음)")
+            elif index == 0:  # 모니터링 탭으로 돌아온 경우
+                # 사건이 진행 중(popup_active=True)이고 상태가 고정된 경우(status_frozen=True)에만
+                # 고정된 상태 복원, 그렇지 않으면 서버에서 오는 최신 상태 표시
+                if self.popup_active and self.status_frozen:
+                    self.restore_frozen_status_display()
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['INIT']} 메인 모니터링 탭 활성화, 고정 상태 복원")
+                else:
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['INIT']} 메인 모니터링 탭 활성화, 일반 상태 흐름")
                 
         except Exception as e:
             if DEBUG:

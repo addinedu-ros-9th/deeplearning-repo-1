@@ -62,6 +62,16 @@ class MonitoringTab(QWidget):
         self.feedback_timer = QTimer()     # 피드백 메시지용 타이머
         self.feedback_timer.timeout.connect(self.clear_feedback_message)
         self.original_detections_text = ""  # 원래 탐지 라벨 텍스트 저장용
+        
+        # 명령 버튼 상태 추적
+        self.command_buttons_state = None  # 현재 활성화된 명령 버튼 상태
+        
+        # 녹화중 표시를 위한 설정
+        self.recording_indicator = None    # 녹화중 표시 위젯 참조
+        self.recording_blink_timer = QTimer(self)  # 녹화중 깜빡임 타이머
+        self.recording_blink_timer.timeout.connect(self.blink_recording_indicator)
+        self.recording_visible = False    # 깜빡임 상태 추적
+        
         self.init_ui()
         self.init_map()
         self.init_robot()
@@ -137,11 +147,13 @@ class MonitoringTab(QWidget):
             self.detections_label = self.findChild(QLabel, "detections")
             
             # 상태 라벨 초기화 (접두사 추가)
-            self.connectivity_label.setText("연결 상태: 연결 대기 중...")
-            self.robot_status_label.setText("로봇 상태: 비활성화 - 시작 버튼을 눌러주세요")
-            self.robot_location_label.setText("로봇 위치: 대기 중")
-            self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
-            self.live_feed_label.setText("비디오 상태: 시스템 비활성화 - 시작 버튼을 눌러주세요")
+            self.connectivity_label.setText("연결 상태: 연결 성공")
+            self.robot_status_label.setText("로봇 상태: 대기 중")
+            self.robot_location_label.setText("로봇 위치: BASE")
+            self.detections_label.setText("탐지 상태: 탐지 준비 완료")
+            
+            # 시스템을 기본적으로 준비 상태로 설정 (로그인 후 바로 정보 표시)
+            self.system_ready = True
             
             # 스트리밍 버튼 초기 텍스트 설정
             self.btn_start_video_stream.setText("Start Video Stream")
@@ -809,18 +821,29 @@ class MonitoringTab(QWidget):
                 print(traceback.format_exc())
 
     def handle_case_closed(self):
-        """CASE_CLOSED 버튼 클릭 처리: 명령 전송 후 버튼 비활성화"""
-        # CASE_CLOSED 명령 전송
-        self.robot_command.emit("CASE_CLOSED")
+        """사건 종료 버튼 클릭 핸들러"""
+        # 기본 명령 전송 처리
+        self.handle_command_button("CASE_CLOSED")
         
-        # 피드백 메시지 표시
-        self.show_feedback_message('command', {'command': 'CASE_CLOSED'})
+        # 추가로 모든 버튼 상태 초기화
+        if self.command_buttons_state and self.command_buttons_state["button"]:
+            button = self.command_buttons_state["button"]
+            original_style = self.command_buttons_state["original_style"]
+            
+            # 버튼 색상 원복
+            button.setStyleSheet(original_style)
         
         # 버튼 비활성화
         self.set_response_buttons_enabled(False)
         
+        # 이동 버튼 활성화
+        self.enable_movement_buttons()
+        
+        # 녹화중 표시 비활성화
+        self.show_recording_indicator(False)
+        
         if DEBUG:
-            print("사건 종료 처리: 명령 버튼 비활성화 완료")
+            print("사건 종료: 모든 버튼 상태 초기화")
     
     def show_feedback_message(self, message_type, action_info):
         """사용자 액션 피드백 메시지 표시 (1.5초 후 사라짐)
@@ -898,7 +921,7 @@ class MonitoringTab(QWidget):
                 print(f"피드백 메시지 표시 실패: {e}")
                 import traceback
                 print(traceback.format_exc())
-                
+
     def clear_feedback_message(self):
         """피드백 메시지 지우기"""
         try:
@@ -933,9 +956,63 @@ class MonitoringTab(QWidget):
         # 피드백 메시지 표시
         self.show_feedback_message('command', {'command': command})
         
+        # 버튼 색상 변경
+        sender_button = self.sender()
+        if sender_button:
+            # 원래 스타일시트 저장 (없으면 빈 문자열)
+            original_style = sender_button.styleSheet() or ""
+            
+            # 버튼 색상 변경
+            sender_button.setStyleSheet("background-color: #FFC107; font-weight: bold;")
+            
+            # 알림 팝업 표시
+            from PyQt5.QtWidgets import QMessageBox
+            popup = QMessageBox(self)
+            popup.setWindowTitle("명령 전송 완료")
+            
+            # 명령어별 메시지
+            msg_map = {
+                "FIRE_REPORT": "119 신고가 전송되었습니다.",
+                "POLICE_REPORT": "112 신고가 전송되었습니다.",
+                "ILLEGAL_WARNING": "위법 행위 경고가 전송되었습니다.",
+                "DANGER_WARNING": "위험 상황 경고가 전송되었습니다.",
+                "EMERGENCY_WARNING": "응급 상황 경고가 전송되었습니다.",
+                "CASE_CLOSED": "사건이 종료되었습니다."
+            }
+            
+            popup.setText(msg_map.get(command, f"{command} 명령이 전송되었습니다."))
+            popup.setStandardButtons(QMessageBox.Ok)
+            popup.setWindowModality(Qt.NonModal)  # 모달리스 팝업
+            popup.show()
+            
+            # 2초 후 자동으로 닫히도록 설정
+            QTimer.singleShot(2000, popup.accept)
+            
+            # 버튼 상태 저장 (case closed 시 초기화하기 위함)
+            self.command_buttons_state = {
+                "button": sender_button,
+                "command": command,
+                "original_style": original_style
+            }
+        
         if DEBUG:
             print(f"명령 버튼 클릭됨: {command}")
 
+    def blink_recording_indicator(self):
+        """녹화중 표시 깜빡임 처리"""
+        try:
+            if self.recording_indicator:
+                # 현재 상태 반전
+                self.recording_visible = not self.recording_visible
+                # 상태에 따라 표시/숨김
+                self.recording_indicator.setVisible(self.recording_visible)
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"녹화중 깜빡임 처리 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
+                
     def show_recording_indicator(self, show=False):
         """녹화중 표시 (빨간 점)
         
@@ -943,28 +1020,52 @@ class MonitoringTab(QWidget):
             show (bool): 표시 여부
         """
         try:
-            # 상태 그룹박스 찾기
-            status_group = self.findChild(QGroupBox, "status")
-            if not status_group:
+            # Live 그룹박스 찾기
+            live_group = self.findChild(QGroupBox, "live")
+            if not live_group:
                 if DEBUG:
-                    print("녹화중 표시 실패: 'status' 그룹박스를 찾을 수 없음")
+                    print("녹화중 표시 실패: 'live' 그룹박스를 찾을 수 없음")
                 return
             
             # 녹화중 표시 라벨이 없으면 생성
-            recording_label = self.findChild(QLabel, "recording_indicator")
-            if not recording_label:
-                recording_label = QLabel(status_group)
-                recording_label.setObjectName("recording_indicator")
-                recording_label.setGeometry(5, 5, 16, 16)  # 왼쪽 상단 작은 크기
-                recording_label.setStyleSheet("background-color: red; border-radius: 8px;")
-                recording_label.setToolTip("녹화중")
+            if not self.recording_indicator:
+                self.recording_indicator = QLabel(live_group)
+                self.recording_indicator.setObjectName("recording_indicator")
+                
+                # Live 그룹박스 제목 오른쪽에 위치
+                title_rect = live_group.contentsRect()
+                title_height = 20  # 대략적인 제목 높이
+                
+                # 위치 계산: 제목의 오른쪽 부분
+                x = 50  # Live 텍스트 길이 + 여백
+                y = 0  # 제목 높이의 중앙
+                
+                self.recording_indicator.setGeometry(x, y, 80, title_height)
+                
+                # 텍스트 스타일 설정
+                self.recording_indicator.setStyleSheet("color: red; font-weight: bold;")
+                self.recording_indicator.setText("● Recording")
+                self.recording_indicator.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                self.recording_indicator.setToolTip("녹화중")
+                
+                # 위젯이 겹치지 않게 레이아웃 설정
+                live_group.setContentsMargins(10, 25, 10, 10)  # 상단 여백 증가
 
-            # 표시 여부 설정
+            # 표시 여부 설정 및 깜빡임 처리
             if show:
-                recording_label.show()
-                # 깜박이는 효과를 위한 타이머가 필요하다면 여기에 추가
+                # 일단 표시하고 타이머 시작
+                self.recording_indicator.show()
+                self.recording_visible = True
+                
+                # 깜빡임 타이머 시작 (1.5초 간격)
+                if not self.recording_blink_timer.isActive():
+                    self.recording_blink_timer.start(1500)
             else:
-                recording_label.hide()
+                # 표시 숨기고 타이머 중지
+                self.recording_indicator.hide()
+                self.recording_visible = False
+                if self.recording_blink_timer.isActive():
+                    self.recording_blink_timer.stop()
                 
             if DEBUG:
                 print(f"녹화중 표시 {'활성화' if show else '비활성화'}")
