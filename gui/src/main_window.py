@@ -401,7 +401,7 @@ class MainWindow(QMainWindow):
                 print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신: {current_time}")
                 print(f"  [헤더 정보]")
                 print(f"  - Frame ID: {json_data.get('frame_id')}")
-                print(f"  - 로봇 위치: {json_data.get('location_id', 'unknown')}")  # location_id로 변경
+                print(f"  - 로봇 위치: {json_data.get('location', 'unknown')}")  # location으로 변경
                 print(f"  - 로봇 상태: {json_data.get('robot_status', 'unknown')}")
                 
                 # 탐지 결과가 있는 경우만 출력
@@ -421,9 +421,9 @@ class MainWindow(QMainWindow):
             status = json_data.get('robot_status', 'unknown')
             
             # 위치 정보 추출 - 서버에서 제공하는 여러 가능한 키들을 시도
-            location = json_data.get('location_id')
+            location = json_data.get('location')
             if location is None:
-                location = json_data.get('location')
+                location = json_data.get('location_id')  # 이전 버전 호환성 유지
             if location is None:
                 location = 'A'  # 디폴트 값으로 'A' 설정 (DB에 저장 가능한 유효한 값)
                 
@@ -498,7 +498,7 @@ class MainWindow(QMainWindow):
                     
                     # 탐지 정보에 서버에서 받은 location 추가
                     # 로봇 위치는 이미 위에서 추출한 location 변수에 저장되어 있음
-                    self.current_detection['location_id'] = location
+                    self.current_detection['location'] = location
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 정보에 위치 저장: {location}")
@@ -523,7 +523,7 @@ class MainWindow(QMainWindow):
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
-                        print(f"{DEBUG_TAG['DET']} 탐지 위치 (location_id): {self.current_detection.get('location_id', 'unknown')}")
+                        print(f"{DEBUG_TAG['DET']} 탐지 위치 (location): {self.current_detection.get('location', 'unknown')}")
                         print(f"{DEBUG_TAG['DET']} 새 팝업 생성")
                         print(f"{DEBUG_TAG['DET']} 상태 표시 고정됨")
                         print(f"{DEBUG_TAG['DET']} 첫번째 탐지 정보:")
@@ -725,7 +725,7 @@ class MainWindow(QMainWindow):
                         # 최우선 순위: frozen_status에서 위치 정보 가져오기 
                         # (이게 null이면 current_detection에서 가져오기)
                         # 둘 다 없으면 기본값 'A' 사용 (DB에 저장 가능한 유효한 값)
-                        "location_id": self.frozen_status.get("robot_location") or self.current_detection.get("location_id") or "A",
+                        "location": self.frozen_status.get("robot_location") or self.current_detection.get("location") or "A",
                         
                         "user_id": self.user_id if self.user_id else "user",
                         "is_ignored": self.response_actions["is_ignored"],
@@ -756,8 +756,8 @@ class MainWindow(QMainWindow):
                 print(f"  - 헤더 크기: {int.from_bytes(header, 'big')} 바이트")
                 print(f"  - 로그 내용: {log_data}")
                 print(f"  - 위치 정보(frozen_status): {self.frozen_status.get('robot_location')}")
-                print(f"  - 위치 정보(current_detection): {self.current_detection.get('location_id')}")
-                print(f"  - 최종 사용된 location_id: {log_data['logs'][0]['location_id']}")
+                print(f"  - 위치 정보(current_detection): {self.current_detection.get('location')}")
+                print(f"  - 최종 사용된 location: {log_data['logs'][0]['location']}")
                 
             # DB 매니저에 소켓 연결 및 데이터 전송
             db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
