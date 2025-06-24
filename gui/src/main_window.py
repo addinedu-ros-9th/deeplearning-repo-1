@@ -517,9 +517,10 @@ class MainWindow(QMainWindow):
                     )
                     self.frozen_status["detections"] = detection_text
                     
-                    # 탐지 시작 시간 저장 (UTC 표준시, MySQL 호환 ISO 8601 형식)
-                    from datetime import datetime
-                    self.detection_start_time = datetime.utcnow().isoformat() + "+00:00"
+                    # 탐지 시작 시간 저장 (한국 시간, UTC+9)
+                    from datetime import datetime, timezone, timedelta
+                    korea_timezone = timezone(timedelta(hours=9))  # UTC+9 (한국 시간)
+                    self.detection_start_time = datetime.now(korea_timezone).isoformat()
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
@@ -705,32 +706,27 @@ class MainWindow(QMainWindow):
     def send_log_to_db_manager(self):
         """DB 매니저에게 로그 전송"""
         try:
-            # 현재 시간을 종료 시간으로 설정
-            from datetime import datetime
-            end_time = datetime.utcnow().isoformat() + "+00:00"
+            # 현재 시간을 종료 시간으로 설정 (한국 시간, UTC+9)
+            from datetime import datetime, timezone, timedelta
+            korea_timezone = timezone(timedelta(hours=9))  # UTC+9 (한국 시간)
+            end_time = datetime.now(korea_timezone).isoformat()
             
             if not self.current_detection or not self.detection_start_time:
                 if DEBUG:
                     print(f"{DEBUG_TAG['ERR']} 로그 전송 실패: 탐지 정보 없음")
                 return
                 
-            # 로그 데이터 구성
+            # 로그 데이터 구성 (필드 순서 변경 및 user name을 robot_id로 사용)
             log_data = {
                 "logs": [
                     {
-                        # 'case_id'는 DB에서 auto_increment로 자동 생성되므로, 여기서 보내는 값은 큰 의미가 없습니다.
+                        # 'case_id'는 DB에서 auto_increment로 자동 생성
                         "case_id": 0,
                         "case_type": self.current_detection.get("case", "unknown"),
                         "detection_type": self.current_detection.get("label", "unknown"),
-                        "robot_id": "ROBOT001",  # 로봇 ID
-
-                        # ✨ [핵심 수정] ✨
-                        # 최우선 순위: frozen_status에서 위치 정보 가져오기 
-                        # (이게 null이면 current_detection에서 가져오기)
-                        # 둘 다 없으면 기본값 'A' 사용 (DB에 저장 가능한 유효한 값)
+                        "robot_id": "ROBOT001",
+                        "user_id": self.user_name if self.user_name else "user_name_unknow",  # 기존 user_name 유지
                         "location": self.frozen_status.get("robot_location") or self.current_detection.get("location") or "A",
-                        
-                        "user_id": self.user_id if self.user_id else "user",
                         "is_ignored": self.response_actions["is_ignored"],
                         "is_119_reported": self.response_actions["is_119_reported"],
                         "is_112_reported": self.response_actions["is_112_reported"],
@@ -761,6 +757,9 @@ class MainWindow(QMainWindow):
                 print(f"  - 위치 정보(frozen_status): {self.frozen_status.get('robot_location')}")
                 print(f"  - 위치 정보(current_detection): {self.current_detection.get('location')}")
                 print(f"  - 최종 사용된 location: {log_data['logs'][0]['location']}")
+                print(f"  - 사용자 이름(robot_id): {log_data['logs'][0]['robot_id']}")
+                print(f"  - 시작 시간(한국): {log_data['logs'][0]['start_time']}")
+                print(f"  - 종료 시간(한국): {log_data['logs'][0]['end_time']}")
                 
             # DB 매니저에 소켓 연결 및 데이터 전송
             db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
