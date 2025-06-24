@@ -69,7 +69,7 @@ class LoginWindow(QMainWindow):
         user_id = self.input_id.text()
         password = self.input_pw.text()
         message = {
-            "user_id": user_id,
+            "id": user_id,
             "password": password
         }
 
@@ -115,7 +115,7 @@ class LoginWindow(QMainWindow):
                 self.welcome_msg = QMessageBox(self)
                 self.welcome_msg.setWindowTitle("환영합니다")
                 self.welcome_msg.setIcon(QMessageBox.Information)
-                self.welcome_msg.setText(f"{response_data.get('user_name')}님 환영합니다.")
+                self.welcome_msg.setText(f"{response_data.get('name')}님 환영합니다.")
                 # X 버튼과 OK 버튼을 추가하여 사용자가 직접 닫을 수 있게 함
                 self.welcome_msg.setStandardButtons(QMessageBox.Ok)
                 # 모달리스 설정 - 팝업이 다른 창 조작을 방해하지 않게 함
@@ -125,11 +125,15 @@ class LoginWindow(QMainWindow):
                 self.welcome_msg.show()
                 
                 try:
-                    # 사용자 이름 가져오기
-                    user_name = response_data.get("user_name", "사용자")
+                    # 서버 응답에서 사용자 ID 및 이름 가져오기
+                    user_id = response_data.get("id")
+                    user_name = response_data.get("name", "사용자")
                     
-                    # 메인 윈도우 준비 (사용자 이름 전달)
-                    self.main_window = MainWindow(user_name=user_name)
+                    if DEBUG:
+                        print(f"{self.DEBUG_TAG['AUTH']} 사용자 정보: ID={user_id}, NAME={user_name}")
+                    
+                    # 메인 윈도우 준비 (사용자 ID 및 이름 전달)
+                    self.main_window = MainWindow(user_id=user_id, user_name=user_name)
                     
                     # 2초 후 환영 메시지 닫고 메인 윈도우 표시
                     QTimer.singleShot(2000, self.close_welcome_and_open_main)
@@ -145,9 +149,17 @@ class LoginWindow(QMainWindow):
                     
                     QMessageBox.critical(self, "오류", f"메인 윈도우를 생성하는 중 오류가 발생했습니다:\n{e}")
             else:
+                # 실패 사유에 따른 메시지 구분
+                error_result = response_data.get("result", "unknown_error")
                 if DEBUG:
-                    print(f"{self.DEBUG_TAG['AUTH']} 인증 실패")
-                QMessageBox.warning(self, "로그인 실패", "아이디 또는 비밀번호가 올바르지 않습니다.")
+                    print(f"{self.DEBUG_TAG['AUTH']} 인증 실패: {error_result}")
+                
+                if error_result == "id_error":
+                    QMessageBox.warning(self, "로그인 실패", "존재하지 않는 아이디입니다.\n아이디를 확인해주세요.")
+                elif error_result == "password_error":
+                    QMessageBox.warning(self, "로그인 실패", "비밀번호가 일치하지 않습니다.\n비밀번호를 확인해주세요.")
+                else:
+                    QMessageBox.warning(self, "로그인 실패", f"알 수 없는 오류가 발생했습니다.\n다시 시도해주세요. (오류 코드: {error_result})")
 
         except Exception as e:
             if DEBUG:

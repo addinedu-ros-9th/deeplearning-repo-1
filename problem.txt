@@ -1,0 +1,3 @@
+문제점: data_merger.py connec가 아닌 요청을 받는 방법으로 하기
+
+db table 컬럼이랑 다를 수 있으니까 항상 주의

@@ -1,48 +1,32 @@
-# =====================================================================================
-# FILE: main_server/event_analyzer.py
-#
-# PURPOSE:
-#   - AI 서버(Detection Manager)로부터 TCP를 통해 객체 탐지 분석 결과를 수신.
-#   - 수신된 결과 중에서 'person', 'knife', 'gun'과 같이 의미 있는 이벤트만 필터링.
-#   - 필터링된 유의미한 이벤트 데이터를 DataMerger가 사용할 수 있도록 'event_result_queue'에 전송.
-#   - SystemManager로부터 공유받은 robot_status 값을 확인하여, 로봇이 'idle' 또는 'moving'
-#     상태일 때는 분석 결과 수신 및 처리를 일시 중지하는 '조건부 실행자' 역할을 수행.
-#
-# 주요 로직:
-#   1. TCP 서버 실행 (run):
-#      - AI 서버의 연결 요청을 지속적으로 수신 대기.
-#      - 새로운 클라이언트(AI 서버)가 연결될 때마다 전용 처리 스레드(_handle_client)를 생성.
-#   2. 데이터 수신 및 처리 (_handle_client):
-#      - 루프 시작 시, 로봇의 상태(robot_status['state'])를 먼저 확인.
-#      - 'idle' 또는 'moving' 상태이면, 처리를 건너뛰고 잠시 대기하여 CPU 사용을 방지.
-#      - 'patrolling' 상태일 때만, 4바이트 길이 헤더가 포함된 TCP 스트림을 수신하여 JSON 데이터를 파싱.
-#      - 파싱된 데이터를 _process_detection_result 메서드로 전달.
-#   3. 이벤트 필터링 (_process_detection_result):
-#      - JSON 데이터 안의 'detections' 배열을 검사.
-#      - 미리 정의된 주요 객체('person', 'knife', 'gun')가 포함된 경우에만, 해당 데이터를
-#        'event_result_queue'에 삽입.
-# =====================================================================================
+# main_server/event_analyzer.py (디버깅 로그 강화 버전)
 
-# -------------------------------------------------------------------------------------
-# [섹션 1] 모듈 임포트
-# -------------------------------------------------------------------------------------
 import socket
 import threading
 import queue
 import json
 import struct
 import time
+from collections import deque, Counter
 
-# -------------------------------------------------------------------------------------
-# [섹션 2] EventAnalyzer 클래스 정의
-# -------------------------------------------------------------------------------------
 class EventAnalyzer(threading.Thread):
+    WINDOW_SECONDS = 3.0
+    STABILITY_THRESHOLD = 0.8
+    MIN_FRAMES_FOR_STABILITY_CHECK = 25
+    CASE_MAPPING = {
+        'knife': 'danger',
+        'gun': 'danger',
+        'lying_down': 'emergency',
+        'cigarette': 'illegal'
+    }
+
     def __init__(self, listen_port, output_queue, robot_status):
         super().__init__()
-        self.name = "EventAnalyzerThread"
+        self.name = "EventAnalyzer"
         self.running = True
         self.output_queue = output_queue
         self.robot_status = robot_status
+        self.detection_window = deque()
+        self.last_detected_label = None
         self.is_paused_log_printed = False
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -51,69 +35,114 @@ class EventAnalyzer(threading.Thread):
         print(f"[{self.name}] AI 서버의 분석 결과 수신 대기 중... (Port: {listen_port})")
 
     def run(self):
+        print(f"[{self.name}] 스레드 시작.")
         while self.running:
             try:
                 client_socket, addr = self.server_socket.accept()
                 print(f"[{self.name}] AI 서버 연결됨: {addr}")
-                handler_thread = threading.Thread(target=self._handle_client, args=(client_socket, addr))
-                handler_thread.daemon = True
-                handler_thread.start()
+                handler = threading.Thread(target=self._handle_client, args=(client_socket, addr), daemon=True)
+                handler.start()
             except socket.error:
                 if not self.running: break
         print(f"[{self.name}] 스레드 종료.")
 
     def _handle_client(self, conn, addr):
-        try:
-            while self.running:
+        buffer = b''
+        while self.running:
+            try:
                 current_state = self.robot_status.get('state', 'idle')
                 if current_state in ['idle', 'moving']:
                     if not self.is_paused_log_printed:
-                        print(f"[ℹ️ 상태 확인] EventAnalyzer: '{current_state}' 상태이므로 분석을 일시 중지합니다.")
+                        print(f"[ℹ️ 상태 확인] {self.name}: '{current_state}' 상태이므로 분석을 일시 중지합니다.")
                         self.is_paused_log_printed = True
                     time.sleep(0.5)
+                    self.detection_window.clear()
                     continue
-                
+
                 if self.is_paused_log_printed:
-                    print(f"[ℹ️ 상태 확인] EventAnalyzer: '{current_state}' 상태이므로 분석을 재개합니다.")
+                    print(f"[ℹ️ 상태 확인] {self.name}: '{current_state}' 상태이므로 분석을 재개합니다.")
                     self.is_paused_log_printed = False
-                
-                header = conn.recv(4)
-                if not header:
-                    print(f"[{self.name}] AI 서버({addr}) 연결 종료됨 (헤더 없음).")
-                    break
-                msg_len = struct.unpack('>I', header)[0]
-                data = b''
-                while len(data) < msg_len:
-                    packet = conn.recv(msg_len - len(data))
-                    if not packet: break
-                    data += packet
-                
-                trailing_data = conn.recv(1) 
+
+                data = conn.recv(4096)
+                if not data: break
+                buffer += data
+
+                while b'\n' in buffer:
+                    payload, buffer = buffer.split(b'\n', 1)
+                    header = payload[:4]
+                    msg_len = struct.unpack('>I', header)[0]
+                    json_data_bytes = payload[4:4+msg_len]
+                    
+                    self._process_detection_result(json_data_bytes)
+                    
+            except (ConnectionResetError, struct.error, json.JSONDecodeError) as e:
+                print(f"[{self.name}] AI 서버({addr}) 연결 오류: {e}")
+                break
+        conn.close()
+        print(f"[{self.name}] AI 서버({addr}) 연결 종료.")
 
 
-                result_json_str = data.decode('utf-8')
-                result_json_for_print = json.loads(result_json_str)
-                print(f"[✅ TCP 수신] 3. AI_Server -> EventAnalyzer : frame_id {result_json_for_print.get('frame_id')}, dets {len(result_json_for_print.get('detections',[]))}건")
-                self._process_detection_result(result_json_str)
-        except ConnectionResetError:
-            print(f"[{self.name}] AI 서버({addr})와 연결이 재설정되었습니다.")
-        except Exception as e:
-            print(f"[{self.name}] AI 서버({addr}) 처리 중 오류: {e}")
-        finally:
-            conn.close()
-
-    def _process_detection_result(self, data_str):
+    def _process_detection_result(self, data_bytes):
         try:
-            result_json = json.loads(data_str)
-            # ✨ 더 이상 특정 객체를 필터링하지 않고 모든 결과를 큐에 넣습니다.
-            # significant_labels 와 is_significant 관련 로직을 제거하고,
-            # if 조건문 없이 바로 큐에 데이터를 넣습니다.
-            print(f"[➡️ 큐 입력] 4. EventAnalyzer -> DataMerger : (patrolling) frame_id {result_json.get('frame_id')}")
+            result_json = json.loads(data_bytes.decode('utf-8'))
+            frame_id = result_json.get('frame_id')
+            timestamp = result_json.get('timestamp')
+            detections = result_json.get('detections', [])
+            
+            print("-----------------------------------------------------")
+            print(f"[✅ TCP 수신] 3. AI_Server -> {self.name}: frame_id={frame_id}, timestamp={timestamp}, dets={len(detections)}건")
+
+            now = time.time()
+            for det in detections:
+                det['case'] = self.CASE_MAPPING.get(det.get('label'))
+
+            self.detection_window.append((now, [d['label'] for d in detections]))
+            while self.detection_window and now - self.detection_window[0][0] > self.WINDOW_SECONDS:
+                self.detection_window.popleft()
+
+            self._update_robot_state_based_on_stability()
+            
+            print(f"[➡️ 큐 입력] 4. {self.name} -> DataMerger: frame_id={frame_id}, timestamp={timestamp}")
             self.output_queue.put(result_json)
+
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             print(f"[{self.name}] JSON 파싱 오류: {e}")
 
+    def _update_robot_state_based_on_stability(self):
+        total_frames = len(self.detection_window)
+        if total_frames < self.MIN_FRAMES_FOR_STABILITY_CHECK:
+            if self.robot_status.get('state') == 'detected':
+                self.robot_status['state'] = 'patrolling'
+                self.last_detected_label = None
+                print(f"[ℹ️ 상태 복귀] {self.name}: 탐지 객체 사라짐. 상태 변경: detected -> patrolling")
+            return
+
+        recent_classes = [cls for _, classes in self.detection_window for cls in classes]
+        counter = Counter(recent_classes)
+        
+        stable_detection_found = False
+        for label, count in counter.most_common():
+            if label not in self.CASE_MAPPING: continue
+            
+            stability = count / total_frames
+            if stability >= self.STABILITY_THRESHOLD:
+                if self.robot_status.get('state') != 'detected' or self.last_detected_label != label:
+                    print("\n=====================================================")
+                    print(f"[🚨 안정적 탐지!] '{label}' 객체가 {self.WINDOW_SECONDS}초 내 {stability:.2%}의 안정도로 탐지됨.")
+                    print(f"[🚦 시스템 상태] {self.name}: 상태 변경: patrolling -> detected")
+                    print("=====================================================\n")
+                    self.robot_status['state'] = 'detected'
+                    self.last_detected_label = label
+                stable_detection_found = True
+                break
+        
+        if not stable_detection_found and self.robot_status.get('state') == 'detected':
+            print(f"[ℹ️ 상태 복귀] {self.name}: 안정적 탐지 사라짐. 상태 변경: detected -> patrolling")
+            self.robot_status['state'] = 'patrolling'
+            self.last_detected_label = None
+            
     def stop(self):
         self.running = False
-        self.server_socket.close()
-        print(f"[{self.name}] 종료 요청 수신.")
+        if self.server_socket:
+            self.server_socket.close()
+        print(f"\n[{self.name}] 종료 요청 수신.")

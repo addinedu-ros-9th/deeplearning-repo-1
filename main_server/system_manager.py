@@ -46,7 +46,7 @@ from .robot_commander import RobotCommander # RobotCommander 클래스 임포트
 # -------------------------------------------------------------------------------------
 
 # --- 로봇 관련 설정 ---
-ROBOT_HOST = "192.168.0.10" # 예시 로봇 IP, 실제 로봇 IP로 변경 필요
+ROBOT_HOST = "192.168.0.32" # 예시 로봇 IP, 실제 로봇 IP로 변경 필요
 IMAGE_RECV_PORT = 9001 # 로봇 이미지를 받을 포트
 ROBOT_CONTROLLER_PORT = 9008 # RobotCommander가 로봇에 제어 명령을 보낼 포트
 
