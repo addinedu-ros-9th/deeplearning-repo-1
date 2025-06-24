@@ -4,7 +4,9 @@ import json
 import time
 import sys
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+KST = timezone(timedelta(hours=9))  # 한국시간으로 변경
+
 #/home/robolee/venv/dl_venv/bin/python3 /home/robolee/dev_ws/deeplearning-repo-1/robot/image_sender.py
 
 # ✅ 설정: 수신기 IP 및 포트
@@ -79,7 +81,7 @@ while cap.isOpened():
     # ✅ JSON 헤더 구성
     header_dict = {
         "frame_id": frame_id,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.kst).isoformat()
     }
     
     json_bytes = json.dumps(header_dict).encode('utf-8')
