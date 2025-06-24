@@ -21,7 +21,7 @@ SOUND_MAPPING = {
     POLICE_REPORT: "112_report.mp3",    #안쓰임 
     ILLEGAL_WARNING: "horn.mp3",
     DANGER_WARNING: "police_siren.mp3",
-    EMERGENCY_WARNING: "abulance.mp3"
+    EMERGENCY_WARNING: "ambulance.mp3"
 }
 
 

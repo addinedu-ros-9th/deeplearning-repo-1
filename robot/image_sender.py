@@ -8,7 +8,11 @@ from datetime import datetime, timezone
 #/home/robolee/venv/dl_venv/bin/python3 /home/robolee/dev_ws/deeplearning-repo-1/robot/image_sender.py
 
 # ✅ 설정: 수신기 IP 및 포트
+<<<<<<< HEAD
+SERVER_IP = '192.168.0.6'   # 수신기 (메인서버) IP
+=======
 SERVER_IP = '192.168.0.38'   # 수신기 (메인서버) IP
+>>>>>>> 10106246d5675426633146711e3b941a5ca1bb22
 SERVER_PORT = 9001
 
 # ✅ 현재 로컬 IP 확인
@@ -49,7 +53,7 @@ print(f"✅ 네트워크 연결 상태 확인됨. 전송을 시작합니다.\n")
 
 # ✅ UDP 소켓 생성 및 카메라 초기화
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture(0)
 frame_id = 0
 
 while cap.isOpened():
