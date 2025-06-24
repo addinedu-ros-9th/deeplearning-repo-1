@@ -727,8 +727,8 @@ class MainWindow(QMainWindow):
                         "case_type": self.current_detection.get("case", "unknown"),
                         "detection_type": self.current_detection.get("label", "unknown"),
                         # 사용자 이름을 robot_id로 사용 (기본값: 김민수)
-                        "robot_id": self.user_name if self.user_name else "unknown_user",
-                        "user_id": self.user_id if self.user_id else "user_name_unknow",  # 사용자 ID 저장
+                        "robot_id": "ROBOT001",
+                        "user_id": self.user_name if self.user_name else "user_name_unknown",  # 사용자 ID 저장
                         "location": self.frozen_status.get("robot_location") or self.current_detection.get("location") or "A",
                         "is_ignored": self.response_actions["is_ignored"],
                         "is_119_reported": self.response_actions["is_119_reported"],
