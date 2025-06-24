@@ -51,7 +51,7 @@ print(f"✅ 네트워크 연결 상태 확인됨. 전송을 시작합니다.\n")
 
 # ✅ UDP 소켓 생성 및 카메라 초기화
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-cap = cv2.VideoCapture(2)
+cap = cv2.VideoCapture(0)
 frame_id = 0
 
 while cap.isOpened():
@@ -81,7 +81,7 @@ while cap.isOpened():
     # ✅ JSON 헤더 구성
     header_dict = {
         "frame_id": frame_id,
-        "timestamp": datetime.now(timezone.kst).isoformat()
+        "timestamp": datetime.now(KST).isoformat()
     }
     
     json_bytes = json.dumps(header_dict).encode('utf-8')
