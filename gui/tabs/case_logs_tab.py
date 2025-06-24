@@ -61,7 +61,7 @@ class CaseLogsTab(QWidget):
             self.tableWidget.setColumnCount(15)
             self.tableWidget.setHorizontalHeaderLabels([
                 "case_id", "start_time", "end_time", "case_type", "detection_type", 
-                "robot_id", "location_id", "user_id", "is_ignored", "is_119_reported", 
+                "robot_id", "location", "user_id", "is_ignored", "is_119_reported", 
                 "is_112_reported", "is_illegal_warned", "is_danger_warned", 
                 "is_emergency_warned", "is_case_closed"
             ])
@@ -146,13 +146,13 @@ class CaseLogsTab(QWidget):
             robot_ids = sorted(robot_ids)
             self.comboBox_robot_id.addItems(robot_ids)
             
-            # 위치 ID 콤보박스
+            # 위치 콤보박스
             self.comboBox_location_id.clear()
             self.comboBox_location_id.addItem("All Locations")
-            location_ids = sorted(set(str(log.get("location_id", "")) for log in self.logs if log.get("location_id") is not None))
+            locations = sorted(set(str(log.get("location", "")) for log in self.logs if log.get("location") is not None))
             if DEBUG:
-                print(f"{DEBUG_TAG['INIT']} 위치 ID 목록: {location_ids}")
-            self.comboBox_location_id.addItems(location_ids)
+                print(f"{DEBUG_TAG['INIT']} 위치 목록: {locations}")
+            self.comboBox_location_id.addItems(locations)
             
             # 사용자 계정 콤보박스 (김대인 포함 보장)
             self.comboBox_user_account.clear()
@@ -196,7 +196,7 @@ class CaseLogsTab(QWidget):
                 case_type = log.get("case_type", "")
                 detection_type = log.get("detection_type", "")
                 robot_id = log.get("robot_id", "")
-                location_id = log.get("location_id", "")
+                location = log.get("location", "")
                 user_name = log.get("user_name", "")
                 is_ignored = str(log.get("is_ignored", 0))
                 is_119_reported = str(log.get("is_119_reported", 0))
@@ -226,7 +226,7 @@ class CaseLogsTab(QWidget):
                 self.tableWidget.setItem(row, 3, QTableWidgetItem(case_type))
                 self.tableWidget.setItem(row, 4, QTableWidgetItem(detection_type))
                 self.tableWidget.setItem(row, 5, QTableWidgetItem(robot_id))
-                self.tableWidget.setItem(row, 6, QTableWidgetItem(location_id))
+                self.tableWidget.setItem(row, 6, QTableWidgetItem(location))
                 self.tableWidget.setItem(row, 7, QTableWidgetItem(user_name))
                 self.tableWidget.setItem(row, 8, QTableWidgetItem(is_ignored))
                 self.tableWidget.setItem(row, 9, QTableWidgetItem(is_119_reported))
@@ -301,7 +301,7 @@ class CaseLogsTab(QWidget):
             
             # 위치 필터링
             if selected_location_id:
-                filtered = [log for log in filtered if log.get("location_id") == selected_location_id]
+                filtered = [log for log in filtered if log.get("location") == selected_location_id]
             
             # 사용자 계정 필터링
             if selected_user_account:

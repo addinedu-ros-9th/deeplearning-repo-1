@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
             # 탐지 응답 관련 명령인 경우 사용자 대응 액션 업데이트
             response_commands = [
                 "FIRE_REPORT", "POLICE_REPORT", "ILLEGAL_WARNING",
-                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED"
+                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED", "IGNORE"
             ]
             
             if command in response_commands:
@@ -307,11 +307,11 @@ class MainWindow(QMainWindow):
                 self.update_response_action(command)
 
             # 로봇 제어 명령들은 로봇 커맨더로 전송 
-            # (이동 명령 + 사건 대응 명령만 포함, PROCEED/IGNORE는 제외)
+            # (이동 명령 + 사건 대응 명령만 포함, PROCEED는 제외)
             important_commands = [
                 "MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE",
                 "FIRE_REPORT", "POLICE_REPORT", "ILLEGAL_WARNING",
-                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED"
+                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED", "IGNORE"
             ]
             
             if command in important_commands:
@@ -626,6 +626,9 @@ class MainWindow(QMainWindow):
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 사용자가 탐지를 무시함 - DB에 로그 전송 시작")
                 print(f"{DEBUG_TAG['DET']} 현재 대응 상태: {self.response_actions}")
+            
+            # 로봇 커맨더에 IGNORE 명령 전송
+            self.send_robot_command("IGNORE")
             
             # DB 매니저에게 로그 전송
             self.send_log_to_db_manager()
