@@ -8,7 +8,11 @@ from datetime import datetime, timezone
 #/home/robolee/venv/dl_venv/bin/python3 /home/robolee/dev_ws/deeplearning-repo-1/robot/image_sender.py
 
 # ✅ 설정: 수신기 IP 및 포트
+<<<<<<< HEAD
 SERVER_IP = '192.168.0.6'   # 수신기 (메인서버) IP
+=======
+SERVER_IP = '192.168.0.38'   # 수신기 (메인서버) IP
+>>>>>>> 10106246d5675426633146711e3b941a5ca1bb22
 SERVER_PORT = 9001
 
 # ✅ 현재 로컬 IP 확인
