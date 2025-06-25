@@ -625,11 +625,12 @@ class MainWindow(QMainWindow):
         else:  # "IGNORE"(무시)인 경우
             self.monitoring_tab.set_response_buttons_enabled(False)
             self.response_actions["is_ignored"] = 1
-            self.response_actions["is_case_closed"] = 1  # 무시도 케이스 종료로 간주
+            # 무시는 case_closed=1로 설정하지 않음 (is_ignored만 1로 설정)
             
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 사용자가 탐지를 무시함 - DB에 로그 전송 시작")
                 print(f"{DEBUG_TAG['DET']} 현재 대응 상태: {self.response_actions}")
+                print(f"{DEBUG_TAG['DET']} IGNORE 처리: 케이스 종료(is_case_closed) 설정 안함, 무시(is_ignored)만 설정")
             
             # 로봇 커맨더에 IGNORE 명령 전송
             self.send_robot_command("IGNORE")
