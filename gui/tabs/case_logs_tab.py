@@ -70,6 +70,9 @@ class CaseLogsTab(QWidget):
             self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
             self.tableWidget.horizontalHeader().setStretchLastSection(False)
             
+            # 기본 인덱스(행번호) 숨기기
+            self.tableWidget.verticalHeader().setVisible(False)
+            
             # 날짜 필터 초기화 (현재 날짜 기준 7일 전부터)
             current_datetime = QDateTime.currentDateTime()
             week_ago = current_datetime.addDays(-7)
@@ -112,7 +115,7 @@ class CaseLogsTab(QWidget):
         # 콤보박스 업데이트
         self.populate_comboboxes()
         
-        # 테이블 업데이트
+        # 테이블 업데이트 (정렬은 update_table 내부에서 수행)
         self.update_table()
         
         # 로그 데이터가 없으면 메시지 표시
@@ -176,6 +179,17 @@ class CaseLogsTab(QWidget):
     def update_table(self):
         """테이블 내용 업데이트"""
         try:
+            # 케이스 ID 기준 오름차순으로 로그 정렬
+            try:
+                # case_id를 정수로 변환하여 정렬 (정수 변환 실패 시 문자열로 정렬)
+                sorted_logs = sorted(self.filtered_logs, key=lambda x: int(x.get("case_id", 0)) if str(x.get("case_id", "")).isdigit() else x.get("case_id", ""))
+                self.filtered_logs = sorted_logs
+            except Exception as e:
+                if DEBUG:
+                    print(f"{DEBUG_TAG['FILTER']} 케이스 ID 정렬 실패: {e}, 문자열 정렬로 시도합니다.")
+                # 정수 변환 실패 시 문자열 기준 정렬
+                self.filtered_logs = sorted(self.filtered_logs, key=lambda x: str(x.get("case_id", "")))
+            
             # 테이블 행 수 설정
             self.tableWidget.setRowCount(0)  # 초기화
             self.tableWidget.setRowCount(len(self.filtered_logs))
@@ -317,7 +331,7 @@ class CaseLogsTab(QWidget):
             
             # 필터링된 결과 저장 및 테이블 업데이트
             self.filtered_logs = filtered
-            self.update_table()
+            self.update_table()  # update_table 내부에서 케이스 ID 기준으로 정렬됨
             
             if DEBUG:
                 print(f"{DEBUG_TAG['FILTER']} 필터 적용 완료: {len(self.filtered_logs)}개 로그 필터링됨")
@@ -350,6 +364,8 @@ class CaseLogsTab(QWidget):
             
             # 필터링 초기화
             self.filtered_logs = self.logs.copy()
+            
+            # 테이블 업데이트 (정렬은 update_table 내부에서 수행)
             self.update_table()
             
         except Exception as e:
