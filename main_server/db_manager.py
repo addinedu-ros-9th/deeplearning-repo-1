@@ -221,7 +221,7 @@ class DBManager(threading.Thread):
             # [핵심 수정] location과 user 테이블을 JOIN하여 id가 아닌 name을 가져옴
             query = """
                 SELECT
-                    cl.id, cl.case_type, cl.detection_type, cl.robot_id,
+                    cl.id AS case_id, cl.case_type, cl.detection_type, cl.robot_id,
                     u.name AS user_id,
                     l.name AS location,
                     cl.image_path, cl.video_path, cl.is_ignored, cl.is_119_reported,
