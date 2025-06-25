@@ -8,11 +8,15 @@ Case Logs Tab Module
 
 import os
 import traceback
+import subprocess
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QTableWidgetItem, QHeaderView, QMessageBox)
 from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtCore import Qt, QDateTime
+from PyQt5.QtCore import Qt, QDateTime, QUrl
 from PyQt5.uic import loadUi
+# 비디오 재생을 위한 추가 imports
+from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
+from PyQt5.QtMultimediaWidgets import QVideoWidget
 
 # 디버그 모드
 DEBUG = True
@@ -55,7 +59,7 @@ class CaseLogsTab(QWidget):
         """UI 초기화"""
         try:
             # UI 파일 로드
-            loadUi("gui/ui/case_logs_tap3.ui", self)
+            loadUi("gui/ui/case_logs_tap4.ui", self)
             
             # 테이블 설정
             self.tableWidget.setColumnCount(15)
@@ -72,6 +76,16 @@ class CaseLogsTab(QWidget):
             
             # 기본 인덱스(행번호) 숨기기
             self.tableWidget.verticalHeader().setVisible(False)
+            
+            # 비디오 위젯 설정 - QWidget을 QVideoWidget으로 대체
+            self.videoWidget = QVideoWidget(self.widget_case_detail_video)
+            self.videoWidget.setGeometry(self.widget_case_detail_video.rect())
+            self.videoWidget.setObjectName("videoWidget")
+            self.videoWidget.show()
+            
+            # 미디어 플레이어 초기화
+            self.mediaPlayer = QMediaPlayer(self)
+            self.mediaPlayer.setVideoOutput(self.videoWidget)
             
             # 날짜 필터 초기화 (현재 날짜 기준 7일 전부터)
             current_datetime = QDateTime.currentDateTime()
@@ -179,6 +193,9 @@ class CaseLogsTab(QWidget):
     def update_table(self):
         """테이블 내용 업데이트"""
         try:
+            # 비디오 재생 중지 (필터 변경 시에도 재생 중지)
+            self.stop_video_playback()
+            
             # 케이스 ID 기준 오름차순으로 로그 정렬
             try:
                 # case_id를 정수로 변환하여 정렬 (정수 변환 실패 시 문자열로 정렬)
@@ -402,29 +419,114 @@ class CaseLogsTab(QWidget):
         try:
             if not self.selected_log:
                 return
-                
-            # 이미지 표시
+            
+            # 기본 경로 설정 (main_server 폴더 기준)
+            base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'main_server')
+            
+            # 이미지 표시 (images 폴더 내 이미지 파일)
             image_path = self.selected_log.get("image_path", "")
-            if image_path and os.path.exists(image_path):
-                pixmap = QPixmap(image_path)
-                self.label_case_detail_image.setPixmap(
-                    pixmap.scaled(
+            if image_path:
+                full_image_path = os.path.join(base_path, image_path)
+                if os.path.exists(full_image_path):
+                    pixmap = QPixmap(full_image_path)
+                    scaled_pixmap = pixmap.scaled(
                         self.label_case_detail_image.width(),
                         self.label_case_detail_image.height(),
                         Qt.KeepAspectRatio
                     )
-                )
+                    self.label_case_detail_image.setPixmap(scaled_pixmap)
+                    self.label_case_detail_image.setAlignment(Qt.AlignCenter)
+                    
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['RECV']} 이미지 로드: {full_image_path}")
+                else:
+                    self.label_case_detail_image.setText(f"이미지 없음\n({image_path})")
+                    self.label_case_detail_image.setAlignment(Qt.AlignCenter)
+                    
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['ERR']} 이미지 파일을 찾을 수 없음: {full_image_path}")
             else:
-                self.label_case_detail_image.setText("이미지 없음")
+                self.label_case_detail_image.setText("이미지 정보 없음")
+                self.label_case_detail_image.setAlignment(Qt.AlignCenter)
             
-            # 비디오 표시 (현재는 단순 경로 표시)
+            # 비디오 재생 (QVideoWidget 사용)
             video_path = self.selected_log.get("video_path", "")
-            if video_path and os.path.exists(video_path):
-                self.label_case_detail_video.setText(f"비디오 경로: {video_path}")
+            if video_path:
+                full_video_path = os.path.join(base_path, video_path)
+                if os.path.exists(full_video_path):
+                    # 미디어 플레이어 설정
+                    media_content = QMediaContent(QUrl.fromLocalFile(full_video_path))
+                    self.mediaPlayer.setMedia(media_content)
+                    
+                    # 비디오 자동 재생
+                    self.mediaPlayer.play()
+                    
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['RECV']} 비디오 재생 시작: {full_video_path}")
+                else:
+                    # 미디어 플레이어 초기화
+                    self.mediaPlayer.setMedia(QMediaContent())
+                    
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['ERR']} 비디오 파일을 찾을 수 없음: {full_video_path}")
             else:
-                self.label_case_detail_video.setText("비디오 없음")
+                # 미디어 플레이어 초기화
+                self.mediaPlayer.setMedia(QMediaContent())
+                
+            # 추가 이벤트 상세 정보 표시
+            case_info = f"케이스 ID: {self.selected_log.get('id', 'Unknown')}\n"
+            case_info += f"케이스 유형: {self.selected_log.get('case_type', 'Unknown')}\n"
+            case_info += f"탐지 유형: {self.selected_log.get('detection_type', 'Unknown')}\n"
+            case_info += f"로봇 ID: {self.selected_log.get('robot_id', 'Unknown')}\n"
+            case_info += f"위치: {self.selected_log.get('location', 'Unknown')}\n"
+            case_info += f"사용자: {self.selected_log.get('user_id', 'Unknown')}\n"
+            case_info += f"시작 시간: {self.selected_log.get('start_time', 'Unknown')}\n"
+            case_info += f"종료 시간: {self.selected_log.get('end_time', 'Unknown')}\n"
+            
+            # 선택한 행에 대한 상세 정보를 표시할 라벨이 있다면 활용
+            if hasattr(self, 'label_case_details'):
+                self.label_case_details.setText(case_info)
                 
         except Exception as e:
             if DEBUG:
                 print(f"{DEBUG_TAG['ERR']} 상세 정보 표시 실패: {e}")
                 print(traceback.format_exc())
+    
+    def play_video(self, video_path):
+        """비디오 파일 재생"""
+        try:
+            if not os.path.exists(video_path):
+                if DEBUG:
+                    print(f"{DEBUG_TAG['ERR']} 비디오 파일을 찾을 수 없음: {video_path}")
+                QMessageBox.warning(self, "파일 없음", f"비디오 파일을 찾을 수 없습니다.\n{video_path}")
+                return
+                
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 비디오 파일 재생 시도: {video_path}")
+            
+            # QMediaPlayer를 사용하여 내부적으로 비디오 재생
+            media_content = QMediaContent(QUrl.fromLocalFile(video_path))
+            self.mediaPlayer.setMedia(media_content)
+            self.mediaPlayer.play()
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 비디오 재생 시작")
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 비디오 재생 처리 실패: {e}")
+                print(traceback.format_exc())
+            QMessageBox.warning(self, "오류", f"비디오 재생 처리 중 오류가 발생했습니다.\n{str(e)}")
+    
+    def stop_video_playback(self):
+        """비디오 재생 중지"""
+        if hasattr(self, 'mediaPlayer'):
+            self.mediaPlayer.stop()
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 비디오 재생 중지")
+    
+    def closeEvent(self, event):
+        """위젯 종료 시 비디오 재생 중지"""
+        self.stop_video_playback()
+        super().closeEvent(event)
