@@ -55,7 +55,7 @@ class CaseLogsTab(QWidget):
         """UI 초기화"""
         try:
             # UI 파일 로드
-            loadUi("gui/ui/case_logs_tap2.ui", self)
+            loadUi("gui/ui/case_logs_tap3.ui", self)
             
             # 테이블 설정
             self.tableWidget.setColumnCount(15)
@@ -137,12 +137,10 @@ class CaseLogsTab(QWidget):
             detection_types = sorted(set(log.get("detection_type", "") for log in self.logs if log.get("detection_type")))
             self.comboBox_detection_type.addItems(detection_types)
             
-            # 로봇 ID 콤보박스 (ROBOT001 포함 보장)
+            # 로봇 ID 콤보박스
             self.comboBox_robot_id.clear()
             self.comboBox_robot_id.addItem("All Robots")
             robot_ids = sorted(set(log.get("robot_id", "") for log in self.logs if log.get("robot_id")))
-            if "ROBOT001" not in robot_ids:
-                robot_ids.append("ROBOT001")
             robot_ids = sorted(robot_ids)
             self.comboBox_robot_id.addItems(robot_ids)
             
@@ -150,17 +148,12 @@ class CaseLogsTab(QWidget):
             self.comboBox_location_id.clear()
             self.comboBox_location_id.addItem("All Locations")
             locations = sorted(set(str(log.get("location", "")) for log in self.logs if log.get("location") is not None))
-            if DEBUG:
-                print(f"{DEBUG_TAG['INIT']} 위치 목록: {locations}")
             self.comboBox_location_id.addItems(locations)
             
-            # 사용자 계정 콤보박스 (김대인 포함 보장)
+            # 사용자 계정 콤보박스
             self.comboBox_user_account.clear()
             self.comboBox_user_account.addItem("All Users")
             user_names = sorted(set(log.get("user_name", "") for log in self.logs if log.get("user_name")))
-            if "김대인" not in user_names:
-                user_names.append("김대인")
-            user_names = sorted(user_names)
             self.comboBox_user_account.addItems(user_names)
             
             # 액션 타입 콤보박스
@@ -189,22 +182,22 @@ class CaseLogsTab(QWidget):
             
             # 테이블에 데이터 추가
             for row, log in enumerate(self.filtered_logs):
-                # 필수 필드 검사 (없을 경우 빈 문자열로 설정)
-                case_id = str(log.get("case_id", ""))
-                start_time = log.get("start_time", "")
-                end_time = log.get("end_time", "")
-                case_type = log.get("case_type", "")
-                detection_type = log.get("detection_type", "")
-                robot_id = log.get("robot_id", "")
-                location = log.get("location", "")
-                user_name = log.get("user_name", "")
-                is_ignored = str(log.get("is_ignored", 0))
-                is_119_reported = str(log.get("is_119_reported", 0))
-                is_112_reported = str(log.get("is_112_reported", 0))
-                is_illeal_warned = str(log.get("is_illeal_warned", 0))
-                is_danger_warned = str(log.get("is_danger_warned", 0))
-                is_emergency_warned = str(log.get("is_emergency_warned", 0))
-                is_case_closed = str(log.get("is_case_closed", 0))
+                # 필수 필드 검사 (없을 경우 "Unknown"으로 설정)
+                case_id = str(log.get("case_id", "Unknown"))
+                start_time = log.get("start_time", "Unknown")
+                end_time = log.get("end_time", "Unknown")
+                case_type = log.get("case_type", "Unknown")
+                detection_type = log.get("detection_type", "Unknown")
+                robot_id = log.get("robot_id", "Unknown")
+                location = log.get("location", "Unknown")
+                user_name = log.get("user_name", "Unknown")
+                is_ignored = str(log.get("is_ignored", "Unknown"))
+                is_119_reported = str(log.get("is_119_reported", "Unknown"))
+                is_112_reported = str(log.get("is_112_reported", "Unknown"))
+                is_illeal_warned = str(log.get("is_illeal_warned", "Unknown"))
+                is_danger_warned = str(log.get("is_danger_warned", "Unknown"))
+                is_emergency_warned = str(log.get("is_emergency_warned", "Unknown"))
+                is_case_closed = str(log.get("is_case_closed", "Unknown"))
                 
                 # ISO 형식 시간을 읽기 좋은 형태로 변환
                 try:
