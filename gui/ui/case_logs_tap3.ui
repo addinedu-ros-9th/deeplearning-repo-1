@@ -281,7 +281,7 @@
    </column>
    <column>
     <property name="text">
-     <string>is_illeal_warned</string>
+     <string>is_illegal_warned</string>
     </property>
    </column>
    <column>

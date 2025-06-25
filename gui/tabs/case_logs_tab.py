@@ -153,8 +153,8 @@ class CaseLogsTab(QWidget):
             # 사용자 계정 콤보박스
             self.comboBox_user_account.clear()
             self.comboBox_user_account.addItem("All Users")
-            user_names = sorted(set(log.get("user_name", "") for log in self.logs if log.get("user_name")))
-            self.comboBox_user_account.addItems(user_names)
+            user_ids = sorted(set(log.get("user_id", "") for log in self.logs if log.get("user_id")))
+            self.comboBox_user_account.addItems(user_ids)
             
             # 액션 타입 콤보박스
             self.comboBox_action_type.clear()
@@ -190,11 +190,11 @@ class CaseLogsTab(QWidget):
                 detection_type = log.get("detection_type", "Unknown")
                 robot_id = log.get("robot_id", "Unknown")
                 location = log.get("location", "Unknown")
-                user_name = log.get("user_name", "Unknown")
+                user_id = log.get("user_id", "Unknown")
                 is_ignored = str(log.get("is_ignored", "Unknown"))
                 is_119_reported = str(log.get("is_119_reported", "Unknown"))
                 is_112_reported = str(log.get("is_112_reported", "Unknown"))
-                is_illeal_warned = str(log.get("is_illeal_warned", "Unknown"))
+                is_illegal_warned = str(log.get("is_illegal_warned", "Unknown"))
                 is_danger_warned = str(log.get("is_danger_warned", "Unknown"))
                 is_emergency_warned = str(log.get("is_emergency_warned", "Unknown"))
                 is_case_closed = str(log.get("is_case_closed", "Unknown"))
@@ -220,11 +220,11 @@ class CaseLogsTab(QWidget):
                 self.tableWidget.setItem(row, 4, QTableWidgetItem(detection_type))
                 self.tableWidget.setItem(row, 5, QTableWidgetItem(robot_id))
                 self.tableWidget.setItem(row, 6, QTableWidgetItem(location))
-                self.tableWidget.setItem(row, 7, QTableWidgetItem(user_name))
+                self.tableWidget.setItem(row, 7, QTableWidgetItem(user_id))
                 self.tableWidget.setItem(row, 8, QTableWidgetItem(is_ignored))
                 self.tableWidget.setItem(row, 9, QTableWidgetItem(is_119_reported))
                 self.tableWidget.setItem(row, 10, QTableWidgetItem(is_112_reported))
-                self.tableWidget.setItem(row, 11, QTableWidgetItem(is_illeal_warned))
+                self.tableWidget.setItem(row, 11, QTableWidgetItem(is_illegal_warned))
                 self.tableWidget.setItem(row, 12, QTableWidgetItem(is_danger_warned))
                 self.tableWidget.setItem(row, 13, QTableWidgetItem(is_emergency_warned))
                 self.tableWidget.setItem(row, 14, QTableWidgetItem(is_case_closed))
@@ -298,7 +298,7 @@ class CaseLogsTab(QWidget):
             
             # 사용자 계정 필터링
             if selected_user_account:
-                filtered = [log for log in filtered if log.get("user_name") == selected_user_account]
+                filtered = [log for log in filtered if log.get("user_id") == selected_user_account]
             
             # 액션 타입 필터링
             if selected_action_type:
@@ -313,7 +313,7 @@ class CaseLogsTab(QWidget):
                 elif selected_action_type == "emergency_warning":
                     filtered = [log for log in filtered if log.get("is_emergency_warned") == 1]
                 elif selected_action_type == "illegal_warning":
-                    filtered = [log for log in filtered if log.get("is_illeal_warned") == 1]
+                    filtered = [log for log in filtered if log.get("is_illegal_warned") == 1]
             
             # 필터링된 결과 저장 및 테이블 업데이트
             self.filtered_logs = filtered
