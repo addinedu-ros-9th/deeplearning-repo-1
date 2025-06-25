@@ -37,6 +37,10 @@ class LoginWindow(QMainWindow):
         loadUi('./gui/ui/login.ui', self)
         self.setWindowTitle("NeighBot 로그인")
         
+        # 비밀번호 입력란 마스킹 처리
+        from PyQt5.QtWidgets import QLineEdit
+        self.input_pw.setEchoMode(QLineEdit.Password)
+        
         self.btn_login.clicked.connect(self.handle_login)
         self.input_id.returnPressed.connect(self.handle_login)
         self.input_pw.returnPressed.connect(self.handle_login)

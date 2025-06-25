@@ -12,16 +12,17 @@ class DetectionDialog(QDialog):
     # 사용자 응답에 대한 시그널 (응답유형, 탐지정보)
     response_signal = pyqtSignal(str, dict)  # "PROCEED"/"IGNORE", 탐지정보
     
-    def __init__(self, parent=None, detection=None, image_data=None):
+    def __init__(self, parent=None, detection=None, image_data=None, user_name=None):
         super().__init__(parent)
         self.detection = detection
         self.image_data = image_data
+        self.user_name = user_name or "사용자"  # 사용자 이름 (기본값: "사용자")
         self.init_ui()
         
     def init_ui(self):
         try:
             # UI 파일 로드
-            loadUi('./gui/ui/detection_dialog2.ui', self)
+            loadUi('./gui/ui/detection_dialog3.ui', self)
             
             # 다이얼로그 제목 설정
             self.setWindowTitle(self.get_dialog_title())
@@ -46,7 +47,7 @@ class DetectionDialog(QDialog):
             self.label_and_case_info.setText(self.get_detection_info())
             
             # 질문 설정
-            self.question.setText("사용자님, 자세히 확인하시겠습니까?")
+            self.question.setText(f"{self.user_name}님, 자세히 확인하시겠습니까?")
             
             # 버튼 연결
             self.btn_ignore.clicked.connect(lambda: self.handle_response("IGNORE"))

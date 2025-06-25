@@ -4,7 +4,9 @@ import json
 import time
 import sys
 import subprocess
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+KST = timezone(timedelta(hours=9))  # 한국시간으로 변경
+
 #/home/robolee/venv/dl_venv/bin/python3 /home/robolee/dev_ws/deeplearning-repo-1/robot/image_sender.py
 
 # ✅ 설정: 수신기 IP 및 포트
@@ -49,7 +51,7 @@ print(f"✅ 네트워크 연결 상태 확인됨. 전송을 시작합니다.\n")
 
 # ✅ UDP 소켓 생성 및 카메라 초기화
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(2)
 frame_id = 0
 
 while cap.isOpened():
@@ -79,7 +81,7 @@ while cap.isOpened():
     # ✅ JSON 헤더 구성
     header_dict = {
         "frame_id": frame_id,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(KST).isoformat()
     }
     
     json_bytes = json.dumps(header_dict).encode('utf-8')

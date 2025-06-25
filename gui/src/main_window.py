@@ -6,7 +6,7 @@ import traceback
 from datetime import datetime, timedelta, timezone
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.uic import loadUi
 from gui.tabs.monitoring_tab import MonitoringTab
 from gui.tabs.case_logs_tab import CaseLogsTab
@@ -26,6 +26,10 @@ DEBUG_TAG = {
     'IMG': '[이미지]',
     'ERR': '[오류]'
 }
+
+# 한국 시간대(타임존) 설정 - 전역 변수
+# 한국 표준시(KST)는 UTC+9 입니다
+KOREA_TIMEZONE = timezone(timedelta(hours=9))  # UTC+9 (한국 표준시, KST)
 
 # 서버 설정
 SERVER_IP = "127.0.0.1"  # localhost
@@ -299,7 +303,7 @@ class MainWindow(QMainWindow):
             # 탐지 응답 관련 명령인 경우 사용자 대응 액션 업데이트
             response_commands = [
                 "FIRE_REPORT", "POLICE_REPORT", "ILLEGAL_WARNING",
-                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED"
+                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED", "IGNORE"
             ]
             
             if command in response_commands:
@@ -307,11 +311,11 @@ class MainWindow(QMainWindow):
                 self.update_response_action(command)
 
             # 로봇 제어 명령들은 로봇 커맨더로 전송 
-            # (이동 명령 + 사건 대응 명령만 포함, PROCEED/IGNORE는 제외)
+            # (이동 명령 + 사건 대응 명령만 포함, PROCEED는 제외)
             important_commands = [
                 "MOVE_TO_A", "MOVE_TO_B", "RETURN_TO_BASE",
                 "FIRE_REPORT", "POLICE_REPORT", "ILLEGAL_WARNING",
-                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED"
+                "DANGER_WARNING", "EMERGENCY_WARNING", "CASE_CLOSED", "IGNORE"
             ]
             
             if command in important_commands:
@@ -372,9 +376,24 @@ class MainWindow(QMainWindow):
         """
         if DEBUG:
             print(f"{DEBUG_TAG['IMG']} 시스템 초기 활성화: {start}")
+        
+        # Start Video Stream 버튼이 처음 클릭되었을 때, 이동 버튼도 활성화 되도록 처리
+        if start:
+            # 현재 위치에 따른 이동 버튼 활성화
+            current_location = self.monitoring_tab.current_location
+            robot_status = json_data.get('robot_status', 'patrolling') if 'json_data' in locals() else 'patrolling'
             
-        # 첫 시작 시 시스템 활성화를 위한 코드를 추가할 수 있음 (필요한 경우)
-        # 현재는 구현 필요 없음 - 항상 백그라운드에서 수신 중
+            if DEBUG:
+                print(f"{DEBUG_TAG['IMG']} 스트리밍 시작: 이동 버튼 활성화 (위치: {current_location}, 상태: {robot_status})")
+            
+            # 이동 중이 아니면 현재 위치에 맞게 이동 버튼 활성화
+            if robot_status != 'moving':
+                self.monitoring_tab.enable_movement_buttons()
+                
+            # 상태 표시도 업데이트 
+            if not self.status_frozen:
+                self.monitoring_tab.update_status("robot_status", robot_status)
+                self.monitoring_tab.update_status("robot_location", current_location)
 
     def handle_detection(self, json_data: dict, image_data: bytes):
         """탐지 데이터 처리"""
@@ -386,7 +405,7 @@ class MainWindow(QMainWindow):
                 print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신: {current_time}")
                 print(f"  [헤더 정보]")
                 print(f"  - Frame ID: {json_data.get('frame_id')}")
-                print(f"  - 로봇 위치: {json_data.get('location_id', 'unknown')}")  # location_id로 변경
+                print(f"  - 로봇 위치: {json_data.get('location', 'unknown')}")  # location으로 변경
                 print(f"  - 로봇 상태: {json_data.get('robot_status', 'unknown')}")
                 
                 # 탐지 결과가 있는 경우만 출력
@@ -406,9 +425,9 @@ class MainWindow(QMainWindow):
             status = json_data.get('robot_status', 'unknown')
             
             # 위치 정보 추출 - 서버에서 제공하는 여러 가능한 키들을 시도
-            location = json_data.get('location_id')
+            location = json_data.get('location')
             if location is None:
-                location = json_data.get('location')
+                location = json_data.get('location_id')  # 이전 버전 호환성 유지
             if location is None:
                 location = 'A'  # 디폴트 값으로 'A' 설정 (DB에 저장 가능한 유효한 값)
                 
@@ -483,7 +502,7 @@ class MainWindow(QMainWindow):
                     
                     # 탐지 정보에 서버에서 받은 location 추가
                     # 로봇 위치는 이미 위에서 추출한 location 변수에 저장되어 있음
-                    self.current_detection['location_id'] = location
+                    self.current_detection['location'] = location
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 정보에 위치 저장: {location}")
@@ -502,13 +521,13 @@ class MainWindow(QMainWindow):
                     )
                     self.frozen_status["detections"] = detection_text
                     
-                    # 탐지 시작 시간 저장 (UTC 표준시, MySQL 호환 ISO 8601 형식)
-                    from datetime import datetime
-                    self.detection_start_time = datetime.utcnow().isoformat() + "+00:00"
+                    # 탐지 시작 시간 저장 (한국 표준시, KST 사용)
+                    # 전역변수 KOREA_TIMEZONE 사용하여 한글로 시간 저장
+                    self.detection_start_time = datetime.now(KOREA_TIMEZONE).isoformat()
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
-                        print(f"{DEBUG_TAG['DET']} 탐지 위치 (location_id): {self.current_detection.get('location_id', 'unknown')}")
+                        print(f"{DEBUG_TAG['DET']} 탐지 위치 (location): {self.current_detection.get('location', 'unknown')}")
                         print(f"{DEBUG_TAG['DET']} 새 팝업 생성")
                         print(f"{DEBUG_TAG['DET']} 상태 표시 고정됨")
                         print(f"{DEBUG_TAG['DET']} 첫번째 탐지 정보:")
@@ -531,7 +550,7 @@ class MainWindow(QMainWindow):
                     self.reset_response_actions()
                     
                     # 팝업 다이얼로그 생성 및 표시
-                    dialog = DetectionDialog(self, detection, image_data)
+                    dialog = DetectionDialog(self, detection, image_data, self.user_name)
                     dialog.response_signal.connect(self.handle_detection_response)
                     dialog.setWindowModality(Qt.ApplicationModal)  # 다이얼로그가 닫힐 때까지 다른 창 조작 불가
                     dialog.show()
@@ -570,6 +589,20 @@ class MainWindow(QMainWindow):
         }
         self.monitoring_tab.show_feedback_message('dialog', action_info)
         
+        # 팝업 알림 표시
+        popup = QMessageBox(self)
+        popup.setWindowTitle("응답 처리")
+        if response == "PROCEED":
+            popup.setText(f"상황을 진행합니다.\n적절한 대응 명령을 선택하세요.")
+        else:  # "IGNORE"
+            popup.setText(f"상황을 무시합니다.\n계속 모니터링을 진행합니다.")
+        popup.setStandardButtons(QMessageBox.Ok)
+        popup.setWindowModality(Qt.NonModal)  # 모달리스 팝업
+        popup.show()
+        
+        # 2초 후 자동으로 닫히도록 설정
+        QTimer.singleShot(2000, popup.accept)
+        
         # 응답이 "PROCEED"(진행)인 경우 응답 명령 버튼들 활성화하고 이동 버튼 비활성화
         if response == "PROCEED":
             # 응답 버튼만 활성화하고, 서버에 명령을 보내지 않음
@@ -598,6 +631,9 @@ class MainWindow(QMainWindow):
                 print(f"{DEBUG_TAG['DET']} 사용자가 탐지를 무시함 - DB에 로그 전송 시작")
                 print(f"{DEBUG_TAG['DET']} 현재 대응 상태: {self.response_actions}")
             
+            # 로봇 커맨더에 IGNORE 명령 전송
+            self.send_robot_command("IGNORE")
+            
             # DB 매니저에게 로그 전송
             self.send_log_to_db_manager()
             
@@ -605,11 +641,15 @@ class MainWindow(QMainWindow):
             self.popup_active = False
             self.status_frozen = False
             
+            # 로봇 상태를 patrolling으로 명시적 변경 (CASE_CLOSED와 동일하게)
+            self.frozen_status["robot_status"] = "patrolling"
+            
             # 로봇 이동 버튼 다시 활성화
             self.monitoring_tab.enable_movement_buttons()
             
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨 (무시 처리)")
+                print(f"{DEBUG_TAG['DET']} frozen_status 업데이트됨 (robot_status: patrolling)")
                 print(f"{DEBUG_TAG['DET']} 로봇 이동 버튼 재활성화")
 
     def update_response_action(self, action_type):
@@ -629,9 +669,8 @@ class MainWindow(QMainWindow):
         elif action_type == "EMERGENCY_WARNING":
             self.response_actions["is_emergency_warned"] = 1
         elif action_type == "CASE_CLOSED":
+            # 사건 종료 시 DB에 로그 전송
             self.response_actions["is_case_closed"] = 1
-            
-            # 케이스 종료 시 DB에 로그 전송
             self.send_log_to_db_manager()
             
             # 케이스 종료 시 이동 버튼 다시 활성화 (현재 위치에 맞게)
@@ -643,8 +682,13 @@ class MainWindow(QMainWindow):
             self.popup_active = False
             self.status_frozen = False
             
+            # 상태 변경 후 frozen_status 업데이트 - 이것이 핵심 수정 부분
+            # 최신 정보를 frozen_status에 업데이트하여 탭 전환 시 이전 상태로 돌아가지 않도록 함
+            self.frozen_status["robot_status"] = "patrolling"  # 사건 종료 후 상태는 patrolling으로 설정
+            
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨 (사건 종료)")
+                print(f"{DEBUG_TAG['DET']} frozen_status 업데이트됨 (robot_status: patrolling)")
         
         if DEBUG:
             print(f"{DEBUG_TAG['DET']} 대응 액션 업데이트: {action_type}")
@@ -665,32 +709,27 @@ class MainWindow(QMainWindow):
     def send_log_to_db_manager(self):
         """DB 매니저에게 로그 전송"""
         try:
-            # 현재 시간을 종료 시간으로 설정
-            from datetime import datetime
-            end_time = datetime.utcnow().isoformat() + "+00:00"
+            # 현재 시간을 종료 시간으로 설정 (한국 표준시, KST)
+            # 전역변수 KOREA_TIMEZONE 사용
+            end_time = datetime.now(KOREA_TIMEZONE).isoformat()  # 한국 시간으로 현재 시각 기록
             
             if not self.current_detection or not self.detection_start_time:
                 if DEBUG:
                     print(f"{DEBUG_TAG['ERR']} 로그 전송 실패: 탐지 정보 없음")
                 return
                 
-            # 로그 데이터 구성
+            # 로그 데이터 구성 (한국어 주석: 한국시간으로 모든 시간정보 기록)
             log_data = {
                 "logs": [
                     {
-                        # 'case_id'는 DB에서 auto_increment로 자동 생성되므로, 여기서 보내는 값은 큰 의미가 없습니다.
+                        # 'case_id'는 DB에서 auto_increment로 자동 생성됨
                         "case_id": 0,
                         "case_type": self.current_detection.get("case", "unknown"),
                         "detection_type": self.current_detection.get("label", "unknown"),
-                        "robot_id": "ROBOT001",  # 로봇 ID
-
-                        # ✨ [핵심 수정] ✨
-                        # 최우선 순위: frozen_status에서 위치 정보 가져오기 
-                        # (이게 null이면 current_detection에서 가져오기)
-                        # 둘 다 없으면 기본값 'A' 사용 (DB에 저장 가능한 유효한 값)
-                        "location_id": self.frozen_status.get("robot_location") or self.current_detection.get("location_id") or "A",
-                        
-                        "user_id": self.user_id if self.user_id else "user",
+                        # 사용자 이름을 robot_id로 사용 (기본값: 김민수)
+                        "robot_id": "ROBOT001",
+                        "user_id": self.user_name if self.user_name else "user_name_unknown",  # 사용자 ID 저장
+                        "location": self.frozen_status.get("robot_location") or self.current_detection.get("location") or "A",
                         "is_ignored": self.response_actions["is_ignored"],
                         "is_119_reported": self.response_actions["is_119_reported"],
                         "is_112_reported": self.response_actions["is_112_reported"],
@@ -698,8 +737,9 @@ class MainWindow(QMainWindow):
                         "is_danger_warned": self.response_actions["is_danger_warned"],
                         "is_emergency_warned": self.response_actions["is_emergency_warned"],
                         "is_case_closed": self.response_actions["is_case_closed"],
-                        "start_time": self.detection_start_time,
-                        "end_time": end_time
+                        # 한국 시간대(KST)로 기록된 시간 정보
+                        "start_time": self.detection_start_time,  # 탐지 시작 시간 (한국 시간)
+                        "end_time": end_time  # 사건 종료 시간 (한국 시간)
                     }
                 ]
             }
@@ -719,8 +759,15 @@ class MainWindow(QMainWindow):
                 print(f"  - 헤더 크기: {int.from_bytes(header, 'big')} 바이트")
                 print(f"  - 로그 내용: {log_data}")
                 print(f"  - 위치 정보(frozen_status): {self.frozen_status.get('robot_location')}")
-                print(f"  - 위치 정보(current_detection): {self.current_detection.get('location_id')}")
-                print(f"  - 최종 사용된 location_id: {log_data['logs'][0]['location_id']}")
+                print(f"  - 위치 정보(current_detection): {self.current_detection.get('location')}")
+                print(f"  - 최종 사용된 location: {log_data['logs'][0]['location']}")
+                print(f"  - 사용자 이름(robot_id): {log_data['logs'][0]['robot_id']}")
+                print(f"  - 한국 시간 정보:")
+                print(f"    - 탐지 시작: {log_data['logs'][0]['start_time']}")
+                print(f"    - 사건 종료: {log_data['logs'][0]['end_time']}")
+                print(f"  - 사용자 이름(robot_id): {log_data['logs'][0]['robot_id']}")
+                print(f"  - 시작 시간(한국): {log_data['logs'][0]['start_time']}")
+                print(f"  - 종료 시간(한국): {log_data['logs'][0]['end_time']}")
                 
             # DB 매니저에 소켓 연결 및 데이터 전송
             db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -863,26 +910,40 @@ class MainWindow(QMainWindow):
             if DEBUG:
                 print(f"{DEBUG_TAG['INIT']} 탭 변경됨: {index}")
             
-            # 현재 탭이 모니터링 탭이 아닐 경우
-            if index != 0:
-                # 상태 표시 고정
-                self.status_frozen = True
+            # 현재 탭 객체 획득 (어떤 탭인지 확인용)
+            current_tab = self.tabWidget.widget(index)
+            
+            # 탭이 Case Logs 탭인지 확인
+            is_case_logs_tab = (current_tab == self.case_logs_tab)
+            
+            if is_case_logs_tab:
+                # Case Logs 탭으로 이동한 경우 - frozen_status와 무관하게 독립적으로 로그 데이터만 갱신
                 if DEBUG:
-                    print(f"{DEBUG_TAG['INIT']} 상태 표시 고정됨")
-                    
-                # 로그 탭으로 이동한 경우 로그 데이터 갱신
-                # 탭 인덱스가 아닌 실제 위젯 객체를 비교하여 Case Logs 탭 여부 확인
-                current_tab = self.tabWidget.widget(index)
-                if current_tab == self.case_logs_tab:
+                    print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청 (frozen_status 영향 없음)")
+                logs = self.fetch_logs()
+                self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
+            elif index != 0:
+                # 모니터링 탭이 아닌 다른 탭으로 이동(설정 탭 등)
+                # 상태 표시 고정 (단, 사건이 진행 중인 경우만 - popup_active가 True인 경우)
+                if self.popup_active:
+                    self.status_frozen = True
                     if DEBUG:
-                        print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청")
-                    logs = self.fetch_logs()
-                    self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
-            else:
-                # 모니터링 탭으로 돌아온 경우 - 고정된 상태 복원
-                self.restore_frozen_status_display()
-                if DEBUG:
-                    print(f"{DEBUG_TAG['INIT']} 메인 모니터링 탭 활성화, 고정 상태 복원")
+                        print(f"{DEBUG_TAG['INIT']} 상태 표시 고정됨 (진행 중인 사건이 있음)")
+                else:
+                    # 진행 중인 사건이 없으면 frozen 상태가 되지 않도록 함
+                    self.status_frozen = False
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['INIT']} 상태 표시 유지됨 (진행 중인 사건 없음)")
+            elif index == 0:  # 모니터링 탭으로 돌아온 경우
+                # 사건이 진행 중(popup_active=True)이고 상태가 고정된 경우(status_frozen=True)에만
+                # 고정된 상태 복원, 그렇지 않으면 서버에서 오는 최신 상태 표시
+                if self.popup_active and self.status_frozen:
+                    self.restore_frozen_status_display()
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['INIT']} 메인 모니터링 탭 활성화, 고정 상태 복원")
+                else:
+                    if DEBUG:
+                        print(f"{DEBUG_TAG['INIT']} 메인 모니터링 탭 활성화, 일반 상태 흐름")
                 
         except Exception as e:
             if DEBUG:

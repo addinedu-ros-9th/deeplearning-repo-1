@@ -1,4 +1,4 @@
-# main_server/event_analyzer.py (디버깅 로그 강화 버전)
+# main_server/event_analyzer.py (수정 완료)
 
 import socket
 import threading
@@ -96,7 +96,7 @@ class EventAnalyzer(threading.Thread):
             for det in detections:
                 det['case'] = self.CASE_MAPPING.get(det.get('label'))
 
-            self.detection_window.append((now, [d['label'] for d in detections]))
+            self.detection_window.append((now, [d['label'] for d in detections if d.get('label')]))
             while self.detection_window and now - self.detection_window[0][0] > self.WINDOW_SECONDS:
                 self.detection_window.popleft()
 
@@ -109,37 +109,33 @@ class EventAnalyzer(threading.Thread):
             print(f"[{self.name}] JSON 파싱 오류: {e}")
 
     def _update_robot_state_based_on_stability(self):
+        # [수정] 'detected' 상태를 자동으로 되돌리는 로직 제거
+        # 이제 한 번 'detected'가 되면 사용자 명령이 있을 때까지 상태가 유지됩니다.
+        if self.robot_status.get('state') == 'detected':
+            return # 이미 탐지 상태이면 더 이상 상태를 변경하지 않음
+
         total_frames = len(self.detection_window)
         if total_frames < self.MIN_FRAMES_FOR_STABILITY_CHECK:
-            if self.robot_status.get('state') == 'detected':
-                self.robot_status['state'] = 'patrolling'
-                self.last_detected_label = None
-                print(f"[ℹ️ 상태 복귀] {self.name}: 탐지 객체 사라짐. 상태 변경: detected -> patrolling")
             return
 
         recent_classes = [cls for _, classes in self.detection_window for cls in classes]
+        if not recent_classes: return
+
         counter = Counter(recent_classes)
         
-        stable_detection_found = False
         for label, count in counter.most_common():
             if label not in self.CASE_MAPPING: continue
             
             stability = count / total_frames
             if stability >= self.STABILITY_THRESHOLD:
-                if self.robot_status.get('state') != 'detected' or self.last_detected_label != label:
-                    print("\n=====================================================")
-                    print(f"[🚨 안정적 탐지!] '{label}' 객체가 {self.WINDOW_SECONDS}초 내 {stability:.2%}의 안정도로 탐지됨.")
-                    print(f"[🚦 시스템 상태] {self.name}: 상태 변경: patrolling -> detected")
-                    print("=====================================================\n")
-                    self.robot_status['state'] = 'detected'
-                    self.last_detected_label = label
-                stable_detection_found = True
+                # 'detected'가 아닌 상태에서만 상태 변경
+                print("\n=====================================================")
+                print(f"[🚨 안정적 탐지!] '{label}' 객체가 {self.WINDOW_SECONDS}초 내 {stability:.2%}의 안정도로 탐지됨.")
+                print(f"[🚦 시스템 상태] {self.name}: 상태 변경: patrolling -> detected")
+                print("=====================================================\n")
+                self.robot_status['state'] = 'detected'
+                self.last_detected_label = label
                 break
-        
-        if not stable_detection_found and self.robot_status.get('state') == 'detected':
-            print(f"[ℹ️ 상태 복귀] {self.name}: 안정적 탐지 사라짐. 상태 변경: detected -> patrolling")
-            self.robot_status['state'] = 'patrolling'
-            self.last_detected_label = None
             
     def stop(self):
         self.running = False

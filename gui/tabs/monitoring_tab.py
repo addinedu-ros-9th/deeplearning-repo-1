@@ -62,9 +62,22 @@ class MonitoringTab(QWidget):
         self.feedback_timer = QTimer()     # 피드백 메시지용 타이머
         self.feedback_timer.timeout.connect(self.clear_feedback_message)
         self.original_detections_text = ""  # 원래 탐지 라벨 텍스트 저장용
+        
+        # 명령 버튼 상태 추적
+        self.command_buttons_state = None  # 현재 활성화된 명령 버튼 상태
+        
+        # 녹화중 표시를 위한 설정
+        self.recording_indicator = None    # 녹화중 표시 위젯 참조
+        self.recording_blink_timer = QTimer(self)  # 녹화중 깜빡임 타이머
+        self.recording_blink_timer.timeout.connect(self.blink_recording_indicator)
+        self.recording_visible = False    # 깜빡임 상태 추적
+        
         self.init_ui()
         self.init_map()
         self.init_robot()
+        
+        # 로그인 시 바로 버튼 활성화 및 로봇 상태 표시
+        self.system_ready = True  # 항상 시스템이 준비된 상태로 설정
         
         # 상태별 메시지 정의
         self.STATUS_MESSAGES = {
@@ -72,6 +85,10 @@ class MonitoringTab(QWidget):
             'moving': '이동 중',
             'patrolling': '순찰 중'
         }
+        
+        # 초기 상태 설정
+        self.robot_status_label.setText("로봇 상태: 순찰 중")
+        self.enable_movement_buttons()
 
     def init_ui(self):
         """UI 초기화"""
@@ -98,10 +115,11 @@ class MonitoringTab(QWidget):
             self.btn_return_base = self.findChild(QPushButton, "btn_return_to_base")
             self.btn_start_video_stream = self.findChild(QPushButton, "btn_start_video_stream")
 
-            # 이동 버튼들 초기 비활성화
-            self.btn_move_to_a.setEnabled(False)
-            self.btn_move_to_b.setEnabled(False)
-            self.btn_return_base.setEnabled(False)
+            # 이동 버튼들 기본 설정 - BASE 위치 가정하여 설정
+            # 로그인하면 바로 활성화되도록 변경
+            self.btn_move_to_a.setEnabled(True)
+            self.btn_move_to_b.setEnabled(True)
+            self.btn_return_base.setEnabled(False)  # BASE 위치에서는 기지 복귀 버튼 비활성화
 
             self.btn_move_to_a.clicked.connect(self.send_move_to_a_command)
             self.btn_move_to_b.clicked.connect(self.send_move_to_b_command)
@@ -137,11 +155,13 @@ class MonitoringTab(QWidget):
             self.detections_label = self.findChild(QLabel, "detections")
             
             # 상태 라벨 초기화 (접두사 추가)
-            self.connectivity_label.setText("연결 상태: 연결 대기 중...")
-            self.robot_status_label.setText("로봇 상태: 비활성화 - 시작 버튼을 눌러주세요")
-            self.robot_location_label.setText("로봇 위치: 대기 중")
-            self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
-            self.live_feed_label.setText("비디오 상태: 시스템 비활성화 - 시작 버튼을 눌러주세요")
+            self.connectivity_label.setText("연결 상태: 연결 성공")
+            self.robot_status_label.setText("로봇 상태: 대기 중")
+            self.robot_location_label.setText("로봇 위치: BASE")
+            self.detections_label.setText("탐지 상태: 탐지 준비 완료")
+            
+            # 시스템을 기본적으로 준비 상태로 설정 (로그인 후 바로 정보 표시)
+            self.system_ready = True
             
             # 스트리밍 버튼 초기 텍스트 설정
             self.btn_start_video_stream.setText("Start Video Stream")
@@ -346,25 +366,28 @@ class MonitoringTab(QWidget):
         - A 위치: B, BASE 버튼만 활성화
         - B 위치: A, BASE 버튼만 활성화
         """
-        if self.system_ready:  # 시스템이 활성화된 경우에만 (스트리밍 표시 여부와 무관)
-            if self.current_location == 'BASE':
-                self.btn_move_to_a.setEnabled(True)
-                self.btn_move_to_b.setEnabled(True)
-                self.btn_return_base.setEnabled(False)
-                if DEBUG:
-                    print("BASE 위치: A, B 버튼 활성화")
-            elif self.current_location == 'A':
-                self.btn_move_to_a.setEnabled(False)  # A에 있을 때는 A로 이동 불가
-                self.btn_move_to_b.setEnabled(True)
-                self.btn_return_base.setEnabled(True)
-                if DEBUG:
-                    print("A 위치: B, BASE 버튼 활성화")
-            elif self.current_location == 'B':
-                self.btn_move_to_a.setEnabled(True)
-                self.btn_move_to_b.setEnabled(False)  # B에 있을 때는 B로 이동 불가
-                self.btn_return_base.setEnabled(True)
-                if DEBUG:
-                    print("B 위치: A, BASE 버튼 활성화")
+        # 로그인하면 바로 버튼이 활성화되도록 변경
+        # system_ready 값과 무관하게 항상 버튼 활성화
+        
+        # 현재 위치에 따라 버튼 활성화
+        if self.current_location == 'BASE':
+            self.btn_move_to_a.setEnabled(True)
+            self.btn_move_to_b.setEnabled(True)
+            self.btn_return_base.setEnabled(False)
+            if DEBUG:
+                print("BASE 위치: A, B 버튼 활성화")
+        elif self.current_location == 'A':
+            self.btn_move_to_a.setEnabled(False)  # A에 있을 때는 A로 이동 불가
+            self.btn_move_to_b.setEnabled(True)
+            self.btn_return_base.setEnabled(True)
+            if DEBUG:
+                print("A 위치: B, BASE 버튼 활성화")
+        elif self.current_location == 'B':
+            self.btn_move_to_a.setEnabled(True)
+            self.btn_move_to_b.setEnabled(False)  # B에 있을 때는 B로 이동 불가
+            self.btn_return_base.setEnabled(True)
+            if DEBUG:
+                print("B 위치: A, BASE 버튼 활성화")
 
     def update_robot_status(self, status: str):
         """로봇 상태 업데이트"""
@@ -434,7 +457,10 @@ class MonitoringTab(QWidget):
                 # 영상 피드 초기화 (접두사 추가)
                 self.live_feed_label.setText("비디오 상태: 스트리밍 시작 중...")
                 
-                # 현재 위치에 따라 이동 버튼 활성화 (최초 1회만)
+                # 로봇 상태 라벨 업데이트 - 시작 버튼을 눌러서 활성화 후
+                self.robot_status_label.setText("로봇 상태: 순찰 중")  # 기본값은 순찰 중으로 설정
+                
+                # 현재 위치에 따라 이동 버튼 항상 활성화 (system_ready 값과 무관)
                 self.enable_movement_buttons()
                 
                 if DEBUG:
@@ -449,8 +475,12 @@ class MonitoringTab(QWidget):
                     # 영상 표시 활성화
                     self.btn_start_video_stream.setText("Stop Video Stream")
                     self.live_feed_label.setText("비디오 상태: 스트리밍 활성화됨")
+                    
+                    # 이동 버튼 상태 갱신 (streaming 상태와 무관하게 항상 활성화)
+                    self.enable_movement_buttons()
+                    
                     if DEBUG:
-                        print("비디오 스트림 표시 활성화")
+                        print("비디오 스트림 표시 활성화 및 이동 버튼 재활성화")
                 else:
                     # 영상 표시 비활성화 (백그라운드 수신은 계속)
                     self.btn_start_video_stream.setText("Start Video Stream")
@@ -567,15 +597,19 @@ class MonitoringTab(QWidget):
                 formatted_msg = f"연결 상태: {message}"
                 self.connectivity_label.setText(formatted_msg)
             elif status_type == "robot_status":
-                # 로봇 상태만 업데이트
-                # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
-                if not self.system_ready:
-                    self.robot_status_label.setText("로봇 상태: 비활성화 - 시작 버튼을 눌러주세요")
-                    return
-                
-                # 로봇 상태 업데이트
+                # 로봇 상태 업데이트 - 항상 표시
                 formatted_msg = f"로봇 상태: {message}"
                 self.robot_status_label.setText(formatted_msg)
+                
+                # Start Video Stream 버튼을 클릭하면 system_ready가 True로 설정됨
+                # 로봇 상태가 업데이트되면 system_ready를 자동으로 True로 설정하여 이동 버튼이 활성화되도록 함
+                if not self.system_ready:
+                    self.system_ready = True
+                    self.enable_movement_buttons()
+                    if DEBUG:
+                        print(f"로봇 상태 업데이트로 인해 system_ready가 활성화되고 이동 버튼이 활성화됨 (상태: {message})")
+                
+                # 로봇의 움직임 상태를 업데이트 (이동 버튼 활성화/비활성화 처리 등에 사용됨)
                 self.update_robot_status(message)
                 
                 # detected 상태면 녹화중 표시
@@ -585,15 +619,17 @@ class MonitoringTab(QWidget):
                     self.show_recording_indicator(False)
                 
             elif status_type == "robot_location":
-                # 로봇 위치만 업데이트
-                # 시스템이 준비되지 않은 경우
-                if not self.system_ready:
-                    self.robot_location_label.setText("로봇 위치: 대기 중")
-                    return
-                
-                # 로봇 위치 업데이트
+                # 로봇 위치 업데이트 - 항상 표시
                 formatted_msg = f"로봇 위치: {message}"
                 self.robot_location_label.setText(formatted_msg)
+                
+                # Start Video Stream 버튼을 클릭하면 system_ready가 True로 설정됨
+                # 로봇 위치가 업데이트되면 system_ready를 자동으로 True로 설정하여 이동 버튼이 활성화되도록 함
+                if not self.system_ready:
+                    self.system_ready = True
+                    self.enable_movement_buttons()
+                    if DEBUG:
+                        print(f"로봇 위치 업데이트로 인해 system_ready가 활성화되고 이동 버튼이 활성화됨 (위치: {message})")
                 
                 # 위치 정보 처리 
                 actual_location, is_moving, destination = self.parse_location(message)
@@ -809,18 +845,32 @@ class MonitoringTab(QWidget):
                 print(traceback.format_exc())
 
     def handle_case_closed(self):
-        """CASE_CLOSED 버튼 클릭 처리: 명령 전송 후 버튼 비활성화"""
-        # CASE_CLOSED 명령 전송
-        self.robot_command.emit("CASE_CLOSED")
+        """사건 종료 버튼 클릭 핸들러"""
+        # 기본 명령 전송 처리
+        self.handle_command_button("CASE_CLOSED")
         
-        # 피드백 메시지 표시
-        self.show_feedback_message('command', {'command': 'CASE_CLOSED'})
+        # 모든 응답 명령 버튼 스타일 초기화
+        self.btn_fire_report.setStyleSheet("")
+        self.btn_police_report.setStyleSheet("")
+        self.btn_illegal_warning.setStyleSheet("")
+        self.btn_danger_warning.setStyleSheet("")
+        self.btn_emergency_warning.setStyleSheet("")
+        self.btn_case_closed.setStyleSheet("")
+        
+        # 명령 버튼 상태 초기화
+        self.command_buttons_state = None
         
         # 버튼 비활성화
         self.set_response_buttons_enabled(False)
         
+        # 이동 버튼 활성화
+        self.enable_movement_buttons()
+        
+        # 녹화중 표시 비활성화
+        self.show_recording_indicator(False)
+        
         if DEBUG:
-            print("사건 종료 처리: 명령 버튼 비활성화 완료")
+            print("사건 종료: 모든 버튼 상태 초기화")
     
     def show_feedback_message(self, message_type, action_info):
         """사용자 액션 피드백 메시지 표시 (1.5초 후 사라짐)
@@ -898,7 +948,7 @@ class MonitoringTab(QWidget):
                 print(f"피드백 메시지 표시 실패: {e}")
                 import traceback
                 print(traceback.format_exc())
-                
+
     def clear_feedback_message(self):
         """피드백 메시지 지우기"""
         try:
@@ -933,9 +983,63 @@ class MonitoringTab(QWidget):
         # 피드백 메시지 표시
         self.show_feedback_message('command', {'command': command})
         
+        # 버튼 색상 변경
+        sender_button = self.sender()
+        if sender_button:
+            # 원래 스타일시트 저장 (없으면 빈 문자열)
+            original_style = sender_button.styleSheet() or ""
+            
+            # 버튼 색상 변경
+            sender_button.setStyleSheet("background-color: #FFC107; font-weight: bold;")
+            
+            # 알림 팝업 표시
+            from PyQt5.QtWidgets import QMessageBox
+            popup = QMessageBox(self)
+            popup.setWindowTitle("명령 전송 완료")
+            
+            # 명령어별 메시지
+            msg_map = {
+                "FIRE_REPORT": "119 신고가 전송되었습니다.",
+                "POLICE_REPORT": "112 신고가 전송되었습니다.",
+                "ILLEGAL_WARNING": "위법 행위 경고가 전송되었습니다.",
+                "DANGER_WARNING": "위험 상황 경고가 전송되었습니다.",
+                "EMERGENCY_WARNING": "응급 상황 경고가 전송되었습니다.",
+                "CASE_CLOSED": "사건이 종료되었습니다."
+            }
+            
+            popup.setText(msg_map.get(command, f"{command} 명령이 전송되었습니다."))
+            popup.setStandardButtons(QMessageBox.Ok)
+            popup.setWindowModality(Qt.NonModal)  # 모달리스 팝업
+            popup.show()
+            
+            # 2초 후 자동으로 닫히도록 설정
+            QTimer.singleShot(2000, popup.accept)
+            
+            # 버튼 상태 저장 (case closed 시 초기화하기 위함)
+            self.command_buttons_state = {
+                "button": sender_button,
+                "command": command,
+                "original_style": original_style
+            }
+        
         if DEBUG:
             print(f"명령 버튼 클릭됨: {command}")
 
+    def blink_recording_indicator(self):
+        """녹화중 표시 깜빡임 처리"""
+        try:
+            if self.recording_indicator:
+                # 현재 상태 반전
+                self.recording_visible = not self.recording_visible
+                # 상태에 따라 표시/숨김
+                self.recording_indicator.setVisible(self.recording_visible)
+                
+        except Exception as e:
+            if DEBUG:
+                print(f"녹화중 깜빡임 처리 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
+                
     def show_recording_indicator(self, show=False):
         """녹화중 표시 (빨간 점)
         
@@ -943,28 +1047,53 @@ class MonitoringTab(QWidget):
             show (bool): 표시 여부
         """
         try:
-            # 상태 그룹박스 찾기
-            status_group = self.findChild(QGroupBox, "status")
-            if not status_group:
+            # Live 그룹박스 찾기
+            live_group = self.findChild(QGroupBox, "live")
+            if not live_group:
                 if DEBUG:
-                    print("녹화중 표시 실패: 'status' 그룹박스를 찾을 수 없음")
+                    print("녹화중 표시 실패: 'live' 그룹박스를 찾을 수 없음")
                 return
             
             # 녹화중 표시 라벨이 없으면 생성
-            recording_label = self.findChild(QLabel, "recording_indicator")
-            if not recording_label:
-                recording_label = QLabel(status_group)
-                recording_label.setObjectName("recording_indicator")
-                recording_label.setGeometry(5, 5, 16, 16)  # 왼쪽 상단 작은 크기
-                recording_label.setStyleSheet("background-color: red; border-radius: 8px;")
-                recording_label.setToolTip("녹화중")
+            if not self.recording_indicator:
+                self.recording_indicator = QLabel(live_group)
+                self.recording_indicator.setObjectName("recording_indicator")
+                
+                # Live 그룹박스 제목 오른쪽에 위치
+                title_rect = live_group.contentsRect()
+                title_height = 20  # 대략적인 제목 높이
+                
+                # 위치 계산: 제목의 오른쪽 부분
+                x = 50  # Live 텍스트 길이 + 여백
+                y = 0  # 제목 높이의 중앙
+                
+                # 넓이 증가 (80 -> 120)
+                self.recording_indicator.setGeometry(x, y, 120, title_height)
+                
+                # 텍스트 스타일 설정 - 글씨 크기 약간 축소하고 볼드체 유지
+                self.recording_indicator.setStyleSheet("color: red; font-weight: bold; font-size: 10pt;")
+                self.recording_indicator.setText("● Recording")
+                self.recording_indicator.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                self.recording_indicator.setToolTip("녹화중")
+                
+                # 위젯이 겹치지 않게 레이아웃 설정
+                live_group.setContentsMargins(10, 25, 10, 10)  # 상단 여백 증가
 
-            # 표시 여부 설정
+            # 표시 여부 설정 및 깜빡임 처리
             if show:
-                recording_label.show()
-                # 깜박이는 효과를 위한 타이머가 필요하다면 여기에 추가
+                # 일단 표시하고 타이머 시작
+                self.recording_indicator.show()
+                self.recording_visible = True
+                
+                # 깜빡임 타이머 시작 (1.5초 간격)
+                if not self.recording_blink_timer.isActive():
+                    self.recording_blink_timer.start(1500)
             else:
-                recording_label.hide()
+                # 표시 숨기고 타이머 중지
+                self.recording_indicator.hide()
+                self.recording_visible = False
+                if self.recording_blink_timer.isActive():
+                    self.recording_blink_timer.stop()
                 
             if DEBUG:
                 print(f"녹화중 표시 {'활성화' if show else '비활성화'}")

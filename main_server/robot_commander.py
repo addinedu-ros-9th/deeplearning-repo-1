@@ -1,9 +1,13 @@
-# main_server/robot_commander.py (디버깅 로그 강화 버전)
+# main_server/robot_commander.py (PROCEED 상태 변경 로직 제외)
 
 import socket
 import threading
 import queue
-from shared.protocols import MOVE_TO_A, MOVE_TO_B, RETURN_TO_BASE
+# [수정] PROCEED를 임포트 목록에서 제외
+from shared.protocols import (
+    MOVE_TO_A, MOVE_TO_B, RETURN_TO_BASE, 
+    IGNORE, CASE_CLOSED
+)
 
 ARUCO_ID_A = 10
 ARUCO_ID_B = 20
@@ -56,8 +60,13 @@ class RobotCommander(threading.Thread):
                     MOVE_TO_B: (ARUCO_ID_B, 'B'),
                     RETURN_TO_BASE: (ARUCO_ID_BASE, 'BASE')
                 }.get(command_code)
-
-                if target_info:
+                
+                # [수정] PROCEED를 상태 변경 조건에서 제외
+                if command_code in [IGNORE, CASE_CLOSED]:
+                    if self.robot_status['state'] == 'detected':
+                        print(f"[🚦 시스템 상태] {self.name}: '{command_code.hex()}' 명령 수신. 상태 변경: detected -> patrolling")
+                        self.robot_status['state'] = 'patrolling'
+                elif target_info:
                     target_id, target_loc = target_info
                     original_state = self.robot_status.get('state')
                     print(f"[🚦 시스템 상태] {self.name}: 상태 변경: {original_state} -> moving")
@@ -80,6 +89,7 @@ class RobotCommander(threading.Thread):
                         self.robot_status['state'] = 'idle'
                         self.robot_status['current_location'] = 'BASE'
                 else:
+                    # PROCEED를 포함하여, 여기서 처리되지 않는 다른 모든 CMD 명령은 로봇 컨트롤러로 직접 전달
                     self._send_command_to_robot(data)
 
         except (ConnectionResetError, BrokenPipeError):
