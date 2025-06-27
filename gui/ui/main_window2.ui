@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>728</width>
-    <height>504</height>
+    <width>1113</width>
+    <height>824</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,32 +32,9 @@
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_on_manage_tab"/>
       </widget>
-      <widget class="QWidget" name="system_tab">
-       <attribute name="title">
-        <string>System Settings</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_2"/>
-      </widget>
      </widget>
     </item>
    </layout>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>728</width>
-     <height>24</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menu">
-    <property name="title">
-     <string>File</string>
-    </property>
-    <addaction name="actionExit"/>
-   </widget>
-   <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionExit">

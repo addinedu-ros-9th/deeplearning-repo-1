@@ -13,6 +13,11 @@ from PyQt5.QtCore import (
 )
 from PyQt5.QtGui import QPixmap, QColor
 from PyQt5.uic import loadUi
+from datetime import datetime, timezone, timedelta
+
+# 한국 시간대(타임존) 설정
+# 한국 표준시(KST)는 UTC+9 입니다
+KOREA_TIMEZONE = timezone(timedelta(hours=9))  # UTC+9 (한국 표준시, KST)
 
 
 # 디버그 모드 설정
@@ -57,7 +62,6 @@ class MonitoringTab(QWidget):
         self.is_moving = False            # 이동 중 여부
         self.waiting_server_confirm = False # 서버 확인 대기 중 여부
         self.user_name = user_name or "사용자"  # 사용자 이름 (기본값 설정)
-        self.system_ready = False          # 시스템 준비 상태 (첫 스트리밍 시작 후 True)
         self.streaming = False             # 스트리밍 표시 여부 (화면에 보여주는지)
         self.feedback_timer = QTimer()     # 피드백 메시지용 타이머
         self.feedback_timer.timeout.connect(self.clear_feedback_message)
@@ -75,9 +79,6 @@ class MonitoringTab(QWidget):
         self.init_ui()
         self.init_map()
         self.init_robot()
-        
-        # 로그인 시 바로 버튼 활성화 및 로봇 상태 표시
-        self.system_ready = True  # 항상 시스템이 준비된 상태로 설정
         
         # 상태별 메시지 정의
         self.STATUS_MESSAGES = {
@@ -349,8 +350,7 @@ class MonitoringTab(QWidget):
             print(f"로봇 이동 완료: 위치={self.current_location}")
         
         # UI 갱신
-        if self.system_ready:
-            self.enable_movement_buttons()
+        self.enable_movement_buttons()
             
         # 추가 이벤트가 필요하면 여기에 추가
 
@@ -366,9 +366,6 @@ class MonitoringTab(QWidget):
         - A 위치: B, BASE 버튼만 활성화
         - B 위치: A, BASE 버튼만 활성화
         """
-        # 로그인하면 바로 버튼이 활성화되도록 변경
-        # system_ready 값과 무관하게 항상 버튼 활성화
-        
         # 현재 위치에 따라 버튼 활성화
         if self.current_location == 'BASE':
             self.btn_move_to_a.setEnabled(True)
@@ -406,10 +403,9 @@ class MonitoringTab(QWidget):
                     print("로봇 이동 중: 모든 이동 버튼 비활성화")
             elif status == 'patrolling' or status == 'idle':
                 # 순찰 중이거나 대기 중일 때는 현재 위치에 따라 버튼 활성화
-                if self.system_ready:  # 시스템이 활성화된 경우에만 버튼 활성화 (스트리밍 표시 여부와 무관)
-                    self.enable_movement_buttons()
-                    if DEBUG:
-                        print(f"로봇 {status}: 이동 버튼 활성화 (현재 위치: {self.current_location})")
+                self.enable_movement_buttons()
+                if DEBUG:
+                    print(f"로봇 {status}: 이동 버튼 활성화 (현재 위치: {self.current_location})")
 
     def send_move_to_a_command(self):
         """A 지역으로 이동 명령을 전송"""
@@ -445,50 +441,29 @@ class MonitoringTab(QWidget):
                 print(f"기지 복귀 명령 전송")
 
     def start_stream(self):
-        """영상 스트리밍을 토글합니다 (시스템은 계속 가동)
+        """영상 스트리밍 표시를 토글합니다 (화면 표시만 제어)
         
         중요: 비디오 스트림은 이동 버튼과 완전히 독립적으로 동작합니다.
         비디오를 중지하거나 시작해도 이동 버튼 상태에는 영향을 주지 않습니다.
         """
         try:
-            # 시스템 초기 활성화 (최초 1회)
-            if not self.system_ready:
-                self.system_ready = True
-                self.streaming = True
-                self.stream_command.emit(True)  # 시스템 활성화 신호 전송
+            # 스트리밍 토글 (화면에 보여주는지 여부만 제어)
+            self.streaming = not self.streaming
+            
+            if self.streaming:
+                # 영상 표시 활성화
                 self.btn_start_video_stream.setText("Stop Video Stream")
-                
-                # 영상 피드 초기화 (접두사 추가)
-                self.live_feed_label.setText("비디오 상태: 스트리밍 시작 중...")
-                
-                # 로봇 상태 라벨 업데이트 - 시작 버튼을 눌러서 활성화 후
-                self.robot_status_label.setText("로봇 상태: 순찰 중")  # 기본값은 순찰 중으로 설정
-                
-                # 현재 위치에 따라 이동 버튼 초기화 (최초 1회만 실행)
-                self.enable_movement_buttons()
+                self.live_feed_label.setText("비디오 상태: 스트리밍 활성화됨")
                 
                 if DEBUG:
-                    print("시스템 및 스트리밍 최초 활성화: 이동 버튼 초기화됨")
-            
-            # 이미 시스템이 활성화된 상태에서는 영상 표시 토글만 수행
+                    print("비디오 스트림 표시 활성화 (이동 버튼 상태는 변경하지 않음)")
             else:
-                # 스트리밍 토글
-                self.streaming = not self.streaming
+                # 영상 표시 비활성화 (백그라운드 수신은 계속)
+                self.btn_start_video_stream.setText("Start Video Stream")
+                self.live_feed_label.setText("비디오 상태: 스트리밍 비활성화 - 시작 버튼을 눌러주세요")
                 
-                if self.streaming:
-                    # 영상 표시 활성화
-                    self.btn_start_video_stream.setText("Stop Video Stream")
-                    self.live_feed_label.setText("비디오 상태: 스트리밍 활성화됨")
-                    
-                    if DEBUG:
-                        print("비디오 스트림 표시 활성화 (이동 버튼 상태는 변경하지 않음)")
-                else:
-                    # 영상 표시 비활성화 (백그라운드 수신은 계속)
-                    self.btn_start_video_stream.setText("Start Video Stream")
-                    self.live_feed_label.setText("비디오 상태: 스트리밍 비활성화 - 시작 버튼을 눌러주세요")
-                    
-                    if DEBUG:
-                        print("비디오 스트림 표시 중지 (이동 버튼 상태는 변경하지 않음)")
+                if DEBUG:
+                    print("비디오 스트림 표시 중지 (이동 버튼 상태는 변경하지 않음)")
             
         except Exception as e:
             if DEBUG:
@@ -538,10 +513,11 @@ class MonitoringTab(QWidget):
             self.live_feed_label.setPixmap(scaled_pixmap)
             self.live_feed_label.setAlignment(Qt.AlignCenter)
             
-            # 이미지 수신 시간 기록 다 그리고 난 뒤
-            current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            # 이미지 수신 시간 기록 (한국 표준시, KST - MySQL DATETIME 형식)
+            current_time_dt = datetime.now(KOREA_TIMEZONE)
+            current_time = current_time_dt.strftime('%Y-%m-%d %H:%M:%S')
             if DEBUG:
-                print(f"[이미지 수신] 카메라 피드 {current_time}")
+                print(f"[이미지 수신] 카메라 처리 완료 후 디스플레이 시간 => {current_time} (KST)")
 
         except Exception as e:
             if DEBUG:
@@ -556,10 +532,11 @@ class MonitoringTab(QWidget):
             image_data (bytes): 이미지 바이너리 데이터
         """
         try:
-            # 이미지 수신 시간 기록
-            current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            # 이미지 수신 시간 기록 (한국 표준시, KST - MySQL DATETIME 형식)
+            current_time_dt = datetime.now(KOREA_TIMEZONE)
+            current_time = current_time_dt.strftime('%Y-%m-%d %H:%M:%S')
             if DEBUG:
-                print(f"[이미지 수신] 탐지 이미지 {current_time}")
+                print(f"[이미지 수신] 탐지 이미지 {current_time} (KST)")
                 
             if not image_data:
                 if DEBUG:
@@ -603,14 +580,6 @@ class MonitoringTab(QWidget):
                 formatted_msg = f"로봇 상태: {message}"
                 self.robot_status_label.setText(formatted_msg)
                 
-                # Start Video Stream 버튼을 클릭하면 system_ready가 True로 설정됨
-                # 로봇 상태가 업데이트되면 system_ready를 자동으로 True로 설정하여 이동 버튼이 활성화되도록 함
-                if not self.system_ready:
-                    self.system_ready = True
-                    self.enable_movement_buttons()
-                    if DEBUG:
-                        print(f"로봇 상태 업데이트로 인해 system_ready가 활성화되고 이동 버튼이 활성화됨 (상태: {message})")
-                
                 # 로봇의 움직임 상태를 업데이트 (이동 버튼 활성화/비활성화 처리 등에 사용됨)
                 self.update_robot_status(message)
                 
@@ -624,14 +593,6 @@ class MonitoringTab(QWidget):
                 # 로봇 위치 업데이트 - 항상 표시
                 formatted_msg = f"로봇 위치: {message}"
                 self.robot_location_label.setText(formatted_msg)
-                
-                # Start Video Stream 버튼을 클릭하면 system_ready가 True로 설정됨
-                # 로봇 위치가 업데이트되면 system_ready를 자동으로 True로 설정하여 이동 버튼이 활성화되도록 함
-                if not self.system_ready:
-                    self.system_ready = True
-                    self.enable_movement_buttons()
-                    if DEBUG:
-                        print(f"로봇 위치 업데이트로 인해 system_ready가 활성화되고 이동 버튼이 활성화됨 (위치: {message})")
                 
                 # 위치 정보 처리 
                 actual_location, is_moving, destination = self.parse_location(message)
@@ -658,15 +619,10 @@ class MonitoringTab(QWidget):
                         # 일반 위치 업데이트 (이동 중이 아닐 때)
                         elif actual_location != self.current_location:
                             self.current_location = actual_location
-                            if self.system_ready:
-                                self.enable_movement_buttons()
+                            self.enable_movement_buttons()
             
             elif status_type == "detections":
                 # 현재 진행 중인 이벤트 상황 업데이트
-                if not self.system_ready:
-                    self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
-                    return
-                
                 # 피드백 메시지가 표시 중이면 원본 텍스트만 업데이트
                 if self.feedback_timer.isActive():
                     self.original_detections_text = f"탐지 상태: {message}"
@@ -677,16 +633,7 @@ class MonitoringTab(QWidget):
                     print(f"탐지 상태 업데이트: {message}")
                     
             elif status_type == "system":
-                # 기존 로직 유지 (하위 호환성)
-                # 시스템이 준비되지 않은 경우 (첫 Start 버튼을 누르기 전)
-                if not self.system_ready:
-                    self.update_status("robot_status", "비활성화 - 시작 버튼을 눌러주세요")
-                    self.update_status("robot_location", "대기 중")
-                    return
-                
-                # 시스템은 준비되었지만 스트리밍 화면이 비활성화된 경우 - 영상만 중지
-                # 상태 정보는 계속 업데이트됨
-                    return
+                # 시스템은 항상 준비된 상태로 간주하고 메시지에서 상태와 위치만 처리
                 
                 # 메시지에서 상태와 위치 분리
                 if "상태:" in message and "위치:" in message:
@@ -962,7 +909,7 @@ class MonitoringTab(QWidget):
                 if self.original_detections_text:
                     self.detections_label.setText(self.original_detections_text)
                 else:
-                    self.detections_label.setText("탐지 상태: 시스템을 시작하면 탐지 결과가 표시됩니다")
+                    self.detections_label.setText("탐지 상태: 탐지된 객체 없음")
                     
             # 타이머 중지
             self.feedback_timer.stop()

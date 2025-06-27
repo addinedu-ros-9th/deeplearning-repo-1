@@ -34,12 +34,45 @@ class LoginWindow(QMainWindow):
         self.main_window = None  # 메인 윈도우 인스턴스를 저장할 속성
         self.setup_connection()
         
-        loadUi('./gui/ui/login.ui', self)
+        loadUi('./gui/ui/login2.ui', self)
         self.setWindowTitle("NeighBot 로그인")
         
         # 비밀번호 입력란 마스킹 처리
         from PyQt5.QtWidgets import QLineEdit
         self.input_pw.setEchoMode(QLineEdit.Password)
+        
+        # 입력필드 스타일 적용
+        self.input_id.setStyleSheet("""
+            QLineEdit {
+                background-color: #FFFFFF;
+                border: 2px solid #91D5FF;
+                border-radius: 6px;
+                padding: 5px;
+                color: #0050B3;
+            }
+            QLineEdit:focus {
+                border: 2px solid #40A9FF;
+            }
+            QLineEdit::placeholder {
+                color: #91C6F2;
+            }
+        """)
+        
+        self.input_pw.setStyleSheet("""
+            QLineEdit {
+                background-color: #FFFFFF;
+                border: 2px solid #91D5FF;
+                border-radius: 6px;
+                padding: 5px;
+                color: #0050B3;
+            }
+            QLineEdit:focus {
+                border: 2px solid #40A9FF;
+            }
+            QLineEdit::placeholder {
+                color: #91C6F2;
+            }
+        """)
         
         self.btn_login.clicked.connect(self.handle_login)
         self.input_id.returnPressed.connect(self.handle_login)

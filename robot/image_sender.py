@@ -51,7 +51,20 @@ print(f"✅ 네트워크 연결 상태 확인됨. 전송을 시작합니다.\n")
 
 # ✅ UDP 소켓 생성 및 카메라 초기화
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-cap = cv2.VideoCapture(0)
+# Try camera index 2 first, fallback to 0 if not available
+cap = None
+for camera_idx in [2, 0]:
+    cap = cv2.VideoCapture(camera_idx)
+    if cap.isOpened():
+        print(f"✅ 카메라 {camera_idx}번 연결됨")
+        break
+    else:
+        print(f"❌ 카메라 {camera_idx}번 연결 실패")
+
+if not cap or not cap.isOpened():
+    print("❌ 사용 가능한 카메라가 없습니다. 프로그램을 종료합니다.")
+    sys.exit(1)
+    
 frame_id = 0
 
 while cap.isOpened():
