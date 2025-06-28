@@ -48,7 +48,7 @@ class LoginWindow(QMainWindow):
                 border: 2px solid #91D5FF;
                 border-radius: 6px;
                 padding: 5px;
-                color: #0050B3;
+                color: #000000;
             }
             QLineEdit:focus {
                 border: 2px solid #40A9FF;
@@ -64,7 +64,7 @@ class LoginWindow(QMainWindow):
                 border: 2px solid #91D5FF;
                 border-radius: 6px;
                 padding: 5px;
-                color: #0050B3;
+                color: #000000;
             }
             QLineEdit:focus {
                 border: 2px solid #40A9FF;

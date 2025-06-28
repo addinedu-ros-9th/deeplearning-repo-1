@@ -515,7 +515,7 @@ class MonitoringTab(QWidget):
             
             # 이미지 수신 시간 기록 (한국 표준시, KST - MySQL DATETIME 형식)
             current_time_dt = datetime.now(KOREA_TIMEZONE)
-            current_time = current_time_dt.strftime('%Y-%m-%d %H:%M:%S')
+            current_time = current_time_dt.strftime('%Y-%m-%d %H:%M:%S.') + f"{current_time_dt.microsecond // 1000:03d}"
             if DEBUG:
                 print(f"[이미지 수신] 카메라 처리 완료 후 디스플레이 시간 => {current_time} (KST)")
 
@@ -948,8 +948,8 @@ class MonitoringTab(QWidget):
             
             # 명령어별 메시지
             msg_map = {
-                "FIRE_REPORT": "119 신고가 전송되었습니다.",
-                "POLICE_REPORT": "112 신고가 전송되었습니다.",
+                "FIRE_REPORT": "119 신고가 접수되었습니다.",
+                "POLICE_REPORT": "112 신고가 접수되었습니다.",
                 "ILLEGAL_WARNING": "위법 행위 경고가 전송되었습니다.",
                 "DANGER_WARNING": "위험 상황 경고가 전송되었습니다.",
                 "EMERGENCY_WARNING": "응급 상황 경고가 전송되었습니다.",

@@ -931,6 +931,8 @@ class MainWindow(QMainWindow):
                     print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청 (frozen_status 영향 없음)")
                 logs = self.fetch_logs()
                 self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
+                # 로그 업데이트 후 필터 초기화 (탭 진입 시마다 필터 초기화)
+                self.case_logs_tab.reset_filter()
             elif index != 0:
                 # 모니터링 탭이 아닌 다른 탭으로 이동(설정 탭 등)
                 # 상태 표시 고정 (단, 사건이 진행 중인 경우만 - popup_active가 True인 경우)

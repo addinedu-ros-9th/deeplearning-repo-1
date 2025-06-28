@@ -72,13 +72,13 @@ class CaseLogsTab(QWidget):
             # UI 파일 로드
             loadUi("gui/ui/case_logs_tap5.ui", self)
             
-            # 테이블 설정 - 사용자가 직접 추가한 헤더 라벨 사용
+            # 테이블 설정 - Qt Designer에서 변경된 컬럼 순서에 맞게 헤더 라벨 변경
             self.tableWidget.setColumnCount(15)
             self.tableWidget.setHorizontalHeaderLabels([
-                "Case ID", "Start Time", "End Time", "Case Type", "Detection Type", 
-                "Robot ID", "User Name", "Location", "Ignored", "Reported to 119", 
-                "Reported to 112", "Illegal Warning", "Danger Warning", 
-                "Emergency Warning", "Case Closed"
+                "Case ID", "Case Closed", "Ignored", "Case Type", "Detection Type", 
+                "Start Time", "End Time", "Robot ID", "User Name", "Location", 
+                "Reported to 119", "Reported to 112", "Illegal Warning", "Danger Warning", 
+                "Emergency Warning"
             ])
             
             # 테이블 열 너비를 내용에 맞게 조정 (자동 늘어나지 않도록 설정)
@@ -87,8 +87,8 @@ class CaseLogsTab(QWidget):
             self.tableWidget.resizeColumnsToContents()
             
             # 특정 열의 너비 설정 (너비가 부족한 열만 추가로 조정)
-            self.tableWidget.setColumnWidth(1, 150)  # Start Time 열
-            self.tableWidget.setColumnWidth(2, 150)  # End Time 열
+            self.tableWidget.setColumnWidth(5, 150)  # Start Time 열 (6번째 인덱스=5)
+            self.tableWidget.setColumnWidth(6, 150)  # End Time 열 (7번째 인덱스=6)
             
             self.tableWidget.horizontalHeader().setStretchLastSection(False)
             
@@ -224,8 +224,9 @@ class CaseLogsTab(QWidget):
             }
             
             for case_type in case_types:
-                friendly_name = case_type_map.get(case_type, case_type)
-                self.comboBox_case_type.addItem(friendly_name, case_type)  # 표시 이름, 실제 값
+                friendly_name = case_type_map.get(case_type, case_type.capitalize())
+                # 저장 값을 소문자로 통일하여 비교 일관성 확보
+                self.comboBox_case_type.addItem(friendly_name, case_type.lower())  # 표시 이름, 실제 값(소문자)
             
             # 탐지 타입 콤보박스 (영어로 표시, 첫 글자 대문자)
             self.comboBox_detection_type.clear()
@@ -241,8 +242,9 @@ class CaseLogsTab(QWidget):
             }
             
             for detection_type in detection_types:
-                friendly_name = detection_type_map.get(detection_type, detection_type)
-                self.comboBox_detection_type.addItem(friendly_name, detection_type)  # 표시 이름, 실제 값
+                friendly_name = detection_type_map.get(detection_type, detection_type.capitalize())
+                # 저장 값을 소문자로 통일하여 비교 일관성 확보
+                self.comboBox_detection_type.addItem(friendly_name, detection_type.lower())  # 표시 이름, 실제 값(소문자)
             
             # 로봇 ID 콤보박스
             self.comboBox_robot_id.clear()
@@ -375,24 +377,58 @@ class CaseLogsTab(QWidget):
                 except:
                     formatted_end = end_time
                 
-                # 테이블에 아이템 추가 - 새로운 컬럼 이름에 맞게 데이터 배치
-                self.tableWidget.setItem(row, 0, QTableWidgetItem(case_id))
-                self.tableWidget.setItem(row, 1, QTableWidgetItem(formatted_start))
-                self.tableWidget.setItem(row, 2, QTableWidgetItem(formatted_end))
-                self.tableWidget.setItem(row, 3, QTableWidgetItem(case_type))
-                self.tableWidget.setItem(row, 4, QTableWidgetItem(detection_type))
-                self.tableWidget.setItem(row, 5, QTableWidgetItem(robot_id))
-                self.tableWidget.setItem(row, 6, QTableWidgetItem(user_id))
-                self.tableWidget.setItem(row, 7, QTableWidgetItem(location))
+                # 테이블에 아이템 추가 - Qt Designer에서 변경한 컬럼 순서에 맞게 데이터 배치
+                # Case ID는 그대로 첫번째 위치 (볼드체 및 중앙 정렬)
+                item_case_id = QTableWidgetItem(case_id)
+                from PyQt5.QtGui import QFont
+                bold_font = QFont()
+                bold_font.setBold(True)
+                item_case_id.setFont(bold_font)
+                item_case_id.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 0, item_case_id)
+                
+                # 이모지를 위한 특수 폰트 설정
+                from PyQt5.QtGui import QFont
+                emoji_font = QFont("Noto Color Emoji", 12)  # 이모지용 폰트 크기 설정
                 
                 # 이진 속성들은 0/1 대신 ✅/❌로 표시
-                self.tableWidget.setItem(row, 8, QTableWidgetItem("✅" if is_ignored == "1" else "❌"))
-                self.tableWidget.setItem(row, 9, QTableWidgetItem("✅" if is_119_reported == "1" else "❌"))
-                self.tableWidget.setItem(row, 10, QTableWidgetItem("✅" if is_112_reported == "1" else "❌"))
-                self.tableWidget.setItem(row, 11, QTableWidgetItem("✅" if is_illegal_warned == "1" else "❌"))
-                self.tableWidget.setItem(row, 12, QTableWidgetItem("✅" if is_danger_warned == "1" else "❌"))
-                self.tableWidget.setItem(row, 13, QTableWidgetItem("✅" if is_emergency_warned == "1" else "❌"))
-                self.tableWidget.setItem(row, 14, QTableWidgetItem("✅" if is_case_closed == "1" else "❌"))
+                # 새 순서: 1=Case Closed, 2=Ignored, 3=Case Type, 4=Detection Type
+                
+                # Case Closed (1번 위치로 이동)
+                item_closed = QTableWidgetItem("✅" if is_case_closed == "1" else "❌")
+                item_closed.setFont(emoji_font)
+                item_closed.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 1, item_closed)
+                
+                # Ignored (2번 위치로 이동)
+                item_ignored = QTableWidgetItem("✅" if is_ignored == "1" else "❌")
+                item_ignored.setFont(emoji_font)
+                item_ignored.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 2, item_ignored)
+                
+                # Case Type과 Detection Type (3, 4번 위치)
+                self.tableWidget.setItem(row, 3, QTableWidgetItem(case_type))
+                self.tableWidget.setItem(row, 4, QTableWidgetItem(detection_type))
+                
+                # 시간 정보 (5, 6번 위치로 이동)
+                self.tableWidget.setItem(row, 5, QTableWidgetItem(formatted_start))
+                self.tableWidget.setItem(row, 6, QTableWidgetItem(formatted_end))
+                
+                # 로봇 ID, 사용자, 위치 정보 (7~9번 위치)
+                self.tableWidget.setItem(row, 7, QTableWidgetItem(robot_id))
+                self.tableWidget.setItem(row, 8, QTableWidgetItem(user_id))
+                self.tableWidget.setItem(row, 9, QTableWidgetItem(location))
+                
+                # 나머지 이모지 표시 항목들 (10~14번 위치)
+                for col_idx, value in [
+                    (10, is_119_reported), (11, is_112_reported),
+                    (12, is_illegal_warned), (13, is_danger_warned), 
+                    (14, is_emergency_warned)
+                ]:
+                    item = QTableWidgetItem("✅" if value == "1" else "❌")
+                    item.setFont(emoji_font)
+                    item.setTextAlignment(Qt.AlignCenter)  # 가운데 정렬 추가
+                    self.tableWidget.setItem(row, col_idx, item)
                 
             # 로그 수 표시 업데이트
             self.label_number_of_log.setText(f"Number of Logs: {len(self.filtered_logs)}")
@@ -417,9 +453,12 @@ class CaseLogsTab(QWidget):
             start_date = self.dateTimeEdit_start_date.dateTime().toString(Qt.ISODate)
             end_date = self.dateTimeEdit_end_date.dateTime().toString(Qt.ISODate)
             
-            # 선택된 필터 값 가져오기
-            selected_case_type = self.comboBox_case_type.currentText() if self.comboBox_case_type.currentIndex() > 0 else None
-            selected_detection_type = self.comboBox_detection_type.currentText() if self.comboBox_detection_type.currentIndex() > 0 else None
+            # 선택된 필터 값 가져오기 - itemData가 있으면 사용, 없으면 텍스트 사용
+            case_type_idx = self.comboBox_case_type.currentIndex()
+            selected_case_type = self.comboBox_case_type.itemData(case_type_idx) if case_type_idx > 0 else None
+            
+            detection_type_idx = self.comboBox_detection_type.currentIndex()
+            selected_detection_type = self.comboBox_detection_type.itemData(detection_type_idx) if detection_type_idx > 0 else None
             selected_robot_id = self.comboBox_robot_id.currentText() if self.comboBox_robot_id.currentIndex() > 0 else None
             selected_location_id = self.comboBox_location_id.currentText() if self.comboBox_location_id.currentIndex() > 0 else None
             selected_user_account = self.comboBox_user_account.currentText() if self.comboBox_user_account.currentIndex() > 0 else None
@@ -447,11 +486,13 @@ class CaseLogsTab(QWidget):
             
             # 케이스 타입 필터링
             if selected_case_type:
-                filtered = [log for log in filtered if log.get("case_type") == selected_case_type]
+                # selected_case_type은 이미 소문자로 저장되어 있음
+                filtered = [log for log in filtered if log.get("case_type", "").lower() == selected_case_type]
             
             # 탐지 타입 필터링
             if selected_detection_type:
-                filtered = [log for log in filtered if log.get("detection_type") == selected_detection_type]
+                # selected_detection_type은 이미 소문자로 저장되어 있음
+                filtered = [log for log in filtered if log.get("detection_type", "").lower() == selected_detection_type]
             
             # 로봇 ID 필터링
             if selected_robot_id:
@@ -597,10 +638,15 @@ class CaseLogsTab(QWidget):
                         ))
                         self.thumbnail_label.show()
                         
-                        # 재생 아이콘 상태 초기화 및 표시
+                        # 재생 아이콘 상태 초기화 및 즉시 표시
                         self.play_icon_visible = False  # 상태 초기화
                         self._show_play_icon()
-
+                        
+                        # UI 업데이트 즉시 강제 적용
+                        if hasattr(self, 'play_icon_label') and self.play_icon_label is not None:
+                            self.play_icon_label.show()
+                            self.play_icon_label.raise_()
+                        self.widget_case_detail_video.update()
                     else:
                         if DEBUG:
                             print(f"{DEBUG_TAG['ERR']} 썸네일 이미지 로드 실패: {full_image_path}")
@@ -655,21 +701,26 @@ class CaseLogsTab(QWidget):
                     # 메타데이터 로드 및 UI 업데이트
                     self._update_media_info()
                     
-                    # VLC 미디어 플레이어를 확실하게 정지 상태로 만들기
-                    if self.mediaPlayer.is_playing() or self.mediaPlayer.get_state() == vlc.State.Paused:
-                        self.mediaPlayer.stop()
+                    # VLC 미디어 플레이어 상태 관리 (Ready로 유지)
+                    # 일시정지 상태로 전환되지 않도록 정지(stop) 상태로 명시적 설정
+                    self.mediaPlayer.stop()
+                    
+                    # 상태 표시 명시적으로 "Ready"로 설정
+                    self.label_media_status.setText("Ready")
+                    self.is_playing = False
                     
                     # 썸네일 표시 상태 유지 (첫 프레임 표시하지 않고 썸네일만 표시)
                     # 재생 버튼을 눌렀을 때만 비디오 프레임이 표시되도록 함
                     
-                    # 재생 시간 정보 업데이트를 위한 타이머
+                    # 타이머가 활성화되어 있다면 중지
+                    # Ready 상태에서는 타이머를 실행하지 않음 (사용자가 재생 버튼을 누를 때만 시작)
                     if hasattr(self, 'timer') and self.timer.isActive():
                         self.timer.stop()
                     
-                    self.timer = QTimer(self)
-                    self.timer.setInterval(500)  # 0.5초마다 업데이트 (더 반응성 좋게)
-                    self.timer.timeout.connect(self.update_time_labels)
-                    self.timer.start()
+                    # Ready 상태에서 플래그 설정
+                    # 이 플래그들은 재생 버튼을 누를 때까지 유지되며, update_time_labels에서 상태가 Paused로 변경되는 것을 방지
+                    self.initial_state = True  # 초기 Ready 상태 표시
+                    self.ready_state_active = True  # Ready 상태 활성화 - 이 플래그가 True면 항상 Ready 상태 유지
                     
                     # 비디오 영역 및 재생 아이콘 상태 최종 확인
                     if hasattr(self, 'thumbnail_label') and self.thumbnail_label.isVisible():
@@ -801,12 +852,16 @@ class CaseLogsTab(QWidget):
                 
         # 플레이 아이콘 크기 및 위치 조정
         if hasattr(self, 'play_icon_label') and hasattr(self, 'widget_case_detail_video'):
-            play_icon_size = min(self.widget_case_detail_video.width(), self.widget_case_detail_video.height()) // 3
+            play_icon_size = min(self.widget_case_detail_video.width(), self.widget_case_detail_video.height()) // 2
             self.play_icon_label.setFixedSize(play_icon_size, play_icon_size)
             self.play_icon_label.move(
                 (self.widget_case_detail_video.width() - play_icon_size) // 2,
                 (self.widget_case_detail_video.height() - play_icon_size) // 2
             )
+            # 아이콘이 보이게 설정 - 크기 조정 후에도 보이게
+            if hasattr(self, 'play_icon_visible') and self.play_icon_visible:
+                self.play_icon_label.show()
+                self.play_icon_label.raise_()
             
     def closeEvent(self, event):
         """위젯 종료 시 비디오 재생 중지 및 리소스 정리"""
@@ -958,6 +1013,8 @@ class CaseLogsTab(QWidget):
             # 일시정지 상태에서는 프레임 업데이트를 위해 강제로 프레임 이동 처리
             if not self.is_playing:
                 self.mediaPlayer.pause()  # 프레임 업데이트를 위한 일시정지 갱신
+                # 일시정지 상태에서는 즉시 재생 아이콘 표시 (슬라이더 조작 후)
+                self._show_play_icon()
                 self._show_play_icon()
             
             # 위치 설정 후 즉시 시간 표시 업데이트 (타이머 대기 없이)
@@ -1028,8 +1085,14 @@ class CaseLogsTab(QWidget):
             # VLC 플레이어에서 프레임 표시 강제 업데이트
             self.mediaPlayer.pause() 
             
-            # 일시정지 상태에서 재생 아이콘 표시
+            # 일시정지 상태에서 재생 아이콘 즉시 표시
             self._show_play_icon()
+            
+            # UI 업데이트 즉시 강제 적용
+            if hasattr(self, 'play_icon_label') and self.play_icon_label is not None:
+                self.play_icon_label.show()
+                self.play_icon_label.raise_()
+            self.widget_case_detail_video.update()
             
             self.mediaPlayer.next_frame()
         else:
@@ -1101,8 +1164,14 @@ class CaseLogsTab(QWidget):
             # VLC 플레이어에서 프레임 표시 강제 업데이트
             self.mediaPlayer.pause()
             
-            # 일시정지 상태에서 재생 아이콘 표시
+            # 일시정지 상태에서 재생 아이콘 즉시 표시
             self._show_play_icon()
+            
+            # UI 업데이트 즉시 강제 적용
+            if hasattr(self, 'play_icon_label') and self.play_icon_label is not None:
+                self.play_icon_label.show()
+                self.play_icon_label.raise_()
+            self.widget_case_detail_video.update()
             
             self.mediaPlayer.next_frame()
         else:
@@ -1156,9 +1225,6 @@ class CaseLogsTab(QWidget):
             if hasattr(self, 'thumbnail_label') and self.thumbnail_label.isVisible():
                 self.thumbnail_label.hide()
             
-            # 백그라운드에서 프레임 렌더링을 위한 시간 부여
-            time.sleep(0.1)
-            
             # 강제로 재생 아이콘 상태 리셋 (항상 제거 후 다시 생성)
             if hasattr(self, 'play_icon_label'):
                 self.play_icon_label.hide()
@@ -1169,8 +1235,11 @@ class CaseLogsTab(QWidget):
             # 재생 아이콘 상태 초기화
             self.play_icon_visible = False
             
-            # 재생 아이콘 표시 (공통 메서드 사용)
+            # 재생 아이콘 즉시 표시 (딜레이 없이 바로 적용)
             self._show_play_icon()
+            
+            # UI 업데이트 강제 적용
+            self.widget_case_detail_video.update()
                 
             # VLC marquee 재생 아이콘 비활성화
             self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 0)
@@ -1203,6 +1272,13 @@ class CaseLogsTab(QWidget):
             # 비디오 재생 시작
             self.mediaPlayer.play()
             self.is_playing = True
+            
+            # Ready 상태에서 벗어나므로 관련 플래그들 모두 해제
+            if hasattr(self, 'initial_state'):
+                self.initial_state = False
+            if hasattr(self, 'ready_state_active'):
+                self.ready_state_active = False  # Ready 상태 비활성화 (이제 재생 중이므로)
+                
             self.pushButton_run.setText("❚❚")  # 일시정지 버튼으로 변경
             
             # 컨트롤 버튼 활성화
@@ -1298,8 +1374,16 @@ class CaseLogsTab(QWidget):
                     self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 0)
                     
                 elif not self.is_playing:
-                    # 일시정지 상태 유지
-                    self.label_media_status.setText("Paused")
+                    # 초기 Ready 상태인 경우는 상태를 변경하지 않음
+                    if hasattr(self, 'initial_state') and self.initial_state:
+                        # Ready 상태 유지 - 절대 변경하지 않음
+                        self.label_media_status.setText("Ready")
+                    elif hasattr(self, 'ready_state_active') and self.ready_state_active:
+                        # ready_state_active가 True인 경우도 Ready 상태 유지
+                        self.label_media_status.setText("Ready")
+                    else:
+                        # 그 외에는 Paused 상태로 설정 (일시정지 버튼을 누른 경우만)
+                        self.label_media_status.setText("Paused")
                     
                     # 일시정지 상태에서는 현재 프레임 유지 (썸네일 표시 X)
                     if hasattr(self, 'thumbnail_label') and self.thumbnail_label.isVisible():
@@ -1357,8 +1441,15 @@ class CaseLogsTab(QWidget):
             duration = media.get_duration()
             
             # 미디어가 준비된 상태에서 VLC가 자동으로 일시정지하는 문제 방지
-            # 플레이어를 명시적으로 정지 상태로 만듦
+            # 플레이어를 명시적으로 정지 상태로 만들고 상태를 Ready로 설정
             self.mediaPlayer.stop()
+            
+            # is_playing 상태를 확실히 False로 설정
+            self.is_playing = False
+            
+            # 상태를 명확하게 "Ready"로 설정 (타이머가 이 값을 덮어쓰지 않도록 내부 변수 추가)
+            self.label_media_status.setText("Ready")
+            self.initial_state = True  # 초기 Ready 상태임을 표시하는 플래그
             
         except Exception as e:
             if DEBUG:
@@ -1410,7 +1501,17 @@ class CaseLogsTab(QWidget):
             
             # 비디오가 준비되어 있을 때만 재생 토글 처리
             if hasattr(self, 'mediaPlayer') and self.mediaPlayer.get_media():
+                # 토글 전에 현재 상태 저장
+                was_playing = self.is_playing
+                
+                # 토글 실행
                 self.toggle_playback()
+                
+                # 재생->일시정지로 변경된 경우, 아이콘이 즉시 표시되도록 강제 처리
+                if was_playing and not self.is_playing:
+                    # 확실하게 재생 아이콘 표시
+                    self._show_play_icon()
+                
                 return True  # 이벤트 처리됨
                 
         return super().eventFilter(obj, event)  # 기본 이벤트 처리
@@ -1479,14 +1580,21 @@ class CaseLogsTab(QWidget):
     
     def _show_play_icon(self):
         """일시정지/정지 상태에서 재생 아이콘 표시"""
-        # 이미 표시된 아이콘이 있는지 확인하여 중복 표시 방지
-        if hasattr(self, 'play_icon_visible') and self.play_icon_visible:
-            # 아이콘이 이미 표시되어 있다면 앞으로 가져오기만 함
+        # 플레이어가 재생 중이면 아이콘을 표시하지 않음
+        if self.is_playing:
             if hasattr(self, 'play_icon_label') and self.play_icon_label is not None:
+                self.play_icon_label.hide()
+            self.play_icon_visible = False
+            return
+            
+        # 이미 표시된 아이콘이 있으면 보이게 하고 앞으로 가져오기만 함
+        if hasattr(self, 'play_icon_visible') and self.play_icon_visible:
+            if hasattr(self, 'play_icon_label') and self.play_icon_label is not None:
+                self.play_icon_label.show()
                 self.play_icon_label.raise_()
                 return
                 
-        # 기존 아이콘이 있으면 완전히 제거
+        # 기존 아이콘이 있으면 완전히 제거 (새로 생성)
         if hasattr(self, 'play_icon_label') and self.play_icon_label is not None:
             try:
                 self.play_icon_label.hide()
@@ -1495,27 +1603,37 @@ class CaseLogsTab(QWidget):
                 pass
             self.play_icon_label = None
             
-        # 새로운 아이콘 생성
+        # 새로운 아이콘 생성 - 배경 완전 투명하게 설정
         self.play_icon_label = QLabel(self.widget_case_detail_video)
-        self.play_icon_label.setStyleSheet("background-color: rgba(0, 0, 0, 150); color: white; font-size: 48px; border-radius: 30px; padding: 10px;")
+        self.play_icon_label.setStyleSheet("""
+            background-color: rgba(0, 0, 0, 0.4); 
+            color: white; 
+            font-size: 60px; 
+            padding: 10px;
+            border-radius: 50%;
+        """)
         self.play_icon_label.setAlignment(Qt.AlignCenter)
         self.play_icon_label.setText("▶")
             
-        # 영상 영역에 맞게 크기 조정
-        play_icon_size = min(self.widget_case_detail_video.width(), self.widget_case_detail_video.height()) // 3
+        # 영상 영역에 맞게 크기 조정 (더 크게 설정)
+        play_icon_size = min(self.widget_case_detail_video.width(), self.widget_case_detail_video.height()) // 2
         self.play_icon_label.setFixedSize(play_icon_size, play_icon_size)
         self.play_icon_label.move(
             (self.widget_case_detail_video.width() - play_icon_size) // 2,
             (self.widget_case_detail_video.height() - play_icon_size) // 2
         )
         
-        # Qt 이벤트 루프에 업데이트 요청을 전달하여 즉시 화면에 표시되도록 함
-        self.widget_case_detail_video.update()
-        
         # 반드시 맨 앞으로 표시 (다른 위젯보다 위에 표시)
         self.play_icon_label.raise_()
         self.play_icon_label.show()
         self.play_icon_visible = True
+        
+        # Qt 이벤트 루프에 업데이트 요청을 전달하여 즉시 화면에 표시되도록 함
+        self.widget_case_detail_video.update()
+        
+        # 강제로 즉시 처리하도록 이벤트를 처리
+        from PyQt5.QtWidgets import QApplication
+        QApplication.processEvents()
         
         if DEBUG and not hasattr(self, 'last_icon_debug_log') or time.time() - self.last_icon_debug_log > 1:
             print(f"{DEBUG_TAG['SEND']} 재생 아이콘 표시")
