@@ -234,12 +234,12 @@
    </column>
    <column>
     <property name="text">
-     <string>Start Time</string>
+     <string>Case Closed</string>
     </property>
    </column>
    <column>
     <property name="text">
-     <string>End Time</string>
+     <string>Ignored</string>
     </property>
    </column>
    <column>
@@ -250,6 +250,16 @@
    <column>
     <property name="text">
      <string>Detection Type</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Start Time</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>End Time</string>
     </property>
    </column>
    <column>
@@ -265,11 +275,6 @@
    <column>
     <property name="text">
      <string>Location</string>
-    </property>
-   </column>
-   <column>
-    <property name="text">
-     <string>Ignored</string>
     </property>
    </column>
    <column>
@@ -295,11 +300,6 @@
    <column>
     <property name="text">
      <string>Emergency Warning</string>
-    </property>
-   </column>
-   <column>
-    <property name="text">
-     <string>Case Closed</string>
     </property>
    </column>
    <column/>
