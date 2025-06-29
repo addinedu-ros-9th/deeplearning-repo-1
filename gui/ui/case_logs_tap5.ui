@@ -7,16 +7,144 @@
     <x>0</x>
     <y>0</y>
     <width>1187</width>
-    <height>771</height>
+    <height>802</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">/* 전체 배경 및 폰트 */
+QWidget {
+    background-color: #e9f6fe;
+    font-family: &quot;Segoe UI&quot;, &quot;맑은 고딕&quot;, sans-serif;
+    font-size: 14px;
+    color: #222;
+}
+
+/* 탭 스타일 */
+QTabWidget::pane {
+    border: none;
+    background-color: #e9f6fe;
+}
+
+QTabBar::tab {
+    background: #d4f4e6;  /* 비활성 탭: 연한 녹색 */
+    border: 1px solid #aad4f5;
+    border-bottom: none;
+    padding: 6px 20px;
+    min-width: 130px;
+    font-weight: bold;
+    color: #006666;
+    text-align: center;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+QTabBar::tab:selected {
+    background: #2196f3;  /* 활성 탭: 진한 파랑 */
+    color: white;
+}
+
+/* 그룹박스 스타일 */
+QGroupBox {
+    border: 1px solid #cce7f6;
+    border-radius: 5px;
+    font-weight: bold;
+    color: #005b99;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px;
+}
+
+/* 라벨 */
+QLabel {
+    font-size: 14px;
+    color: #222;
+}
+#robot_location, #robot_status, #detections {
+    font-weight: bold;
+    background-color: transparent;
+}
+#label_user_name {
+    font-weight: bold;
+    border: none;
+    font-size: 18px;
+}
+#live_feed_label, #map_display_label, #detection_image {
+    border: 1px solid #b3d9ff;
+    border-radius: 6px;
+}
+
+/* 로그 출력 박스 */
+#textEdit_log_box {
+    background-color: white;
+}
+
+/* 버튼 */
+QPushButton {
+    background-color: #4db8ff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #33aaff;
+}
+QPushButton:pressed {
+    background-color: #2196f3;
+}
+
+/* 콤보박스 */
+QComboBox {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 90px;
+}
+
+/* 날짜/시간 선택기 */
+QDateTimeEdit {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* 테이블 */
+QTableWidget {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    gridline-color: #aad4f5;
+}
+QHeaderView::section {
+    background-color: #d0eafc;
+    font-weight: bold;
+    padding: 6px;
+    border: 1px solid #aad4f5;
+}
+
+/* 슬라이더 */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #cce7f6;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #4db8ff;
+    width: 12px;
+    border-radius: 6px;
+}
+</string>
+  </property>
   <widget class="QGroupBox" name="groupBox_case_logs_filter">
    <property name="geometry">
     <rect>
-     <x>10</x>
+     <x>20</x>
      <y>10</y>
      <width>1161</width>
      <height>151</height>
@@ -103,7 +231,7 @@
      <rect>
       <x>150</x>
       <y>100</y>
-      <width>131</width>
+      <width>151</width>
       <height>27</height>
      </rect>
     </property>
@@ -116,7 +244,7 @@
    <widget class="QComboBox" name="comboBox_robot_id">
     <property name="geometry">
      <rect>
-      <x>290</x>
+      <x>310</x>
       <y>100</y>
       <width>131</width>
       <height>27</height>
@@ -131,7 +259,7 @@
    <widget class="QComboBox" name="comboBox_location_id">
     <property name="geometry">
      <rect>
-      <x>570</x>
+      <x>590</x>
       <y>100</y>
       <width>131</width>
       <height>27</height>
@@ -146,7 +274,7 @@
    <widget class="QComboBox" name="comboBox_user_account">
     <property name="geometry">
      <rect>
-      <x>430</x>
+      <x>450</x>
       <y>100</y>
       <width>131</width>
       <height>27</height>
@@ -161,7 +289,7 @@
    <widget class="QComboBox" name="comboBox_action_type">
     <property name="geometry">
      <rect>
-      <x>710</x>
+      <x>730</x>
       <y>100</y>
       <width>131</width>
       <height>27</height>
@@ -176,9 +304,9 @@
    <widget class="QPushButton" name="pushButton_filter_apply">
     <property name="geometry">
      <rect>
-      <x>950</x>
+      <x>900</x>
       <y>100</y>
-      <width>88</width>
+      <width>111</width>
       <height>27</height>
      </rect>
     </property>
@@ -189,9 +317,9 @@
    <widget class="QPushButton" name="pushButton_filter_reset">
     <property name="geometry">
      <rect>
-      <x>1050</x>
+      <x>1020</x>
       <y>100</y>
-      <width>88</width>
+      <width>111</width>
       <height>27</height>
      </rect>
     </property>
@@ -204,9 +332,9 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>180</y>
+     <y>190</y>
      <width>741</width>
-     <height>561</height>
+     <height>601</height>
     </rect>
    </property>
    <property name="editTriggers">
@@ -324,7 +452,7 @@
      <x>760</x>
      <y>170</y>
      <width>421</width>
-     <height>591</height>
+     <height>621</height>
     </rect>
    </property>
    <property name="title">
@@ -334,7 +462,7 @@
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>100</y>
+      <y>80</y>
       <width>401</width>
       <height>281</height>
      </rect>
@@ -344,7 +472,7 @@
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>470</y>
+      <y>450</y>
       <width>71</width>
       <height>27</height>
      </rect>
@@ -357,7 +485,7 @@
     <property name="geometry">
      <rect>
       <x>220</x>
-      <y>470</y>
+      <y>450</y>
       <width>71</width>
       <height>27</height>
      </rect>
@@ -370,7 +498,7 @@
     <property name="geometry">
      <rect>
       <x>310</x>
-      <y>470</y>
+      <y>450</y>
       <width>71</width>
       <height>27</height>
      </rect>
@@ -383,7 +511,7 @@
     <property name="geometry">
      <rect>
       <x>130</x>
-      <y>470</y>
+      <y>450</y>
       <width>71</width>
       <height>27</height>
      </rect>
@@ -396,7 +524,7 @@
     <property name="geometry">
      <rect>
       <x>220</x>
-      <y>510</y>
+      <y>490</y>
       <width>160</width>
       <height>16</height>
      </rect>
@@ -409,7 +537,7 @@
     <property name="geometry">
      <rect>
       <x>150</x>
-      <y>510</y>
+      <y>490</y>
       <width>66</width>
       <height>19</height>
      </rect>
@@ -422,7 +550,7 @@
     <property name="geometry">
      <rect>
       <x>30</x>
-      <y>390</y>
+      <y>370</y>
       <width>361</width>
       <height>16</height>
      </rect>
@@ -434,21 +562,24 @@
    <widget class="QLabel" name="label_running_time">
     <property name="geometry">
      <rect>
-      <x>220</x>
-      <y>440</y>
-      <width>161</width>
-      <height>19</height>
+      <x>30</x>
+      <y>390</y>
+      <width>361</width>
+      <height>20</height>
      </rect>
     </property>
     <property name="text">
      <string>Running Time</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
     </property>
    </widget>
    <widget class="QLabel" name="label_media_status">
     <property name="geometry">
      <rect>
       <x>40</x>
-      <y>440</y>
+      <y>420</y>
       <width>161</width>
       <height>19</height>
      </rect>
@@ -462,7 +593,7 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>750</y>
+     <y>170</y>
      <width>341</width>
      <height>19</height>
     </rect>

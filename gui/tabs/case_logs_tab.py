@@ -95,6 +95,10 @@ class CaseLogsTab(QWidget):
             # 기본 인덱스(행번호) 숨기기
             self.tableWidget.verticalHeader().setVisible(False)
             
+            # 헤더 텍스트 중앙 정렬 설정
+            for i in range(self.tableWidget.columnCount()):
+                self.tableWidget.horizontalHeaderItem(i).setTextAlignment(Qt.AlignCenter)
+            
             # 비디오 위젯 준비 (VLC 사용 시에는 직접 위젯 설정이 필요 없음)
             # VLC는 widget_case_detail_video의 winId를 직접 사용함
             self.widget_case_detail_video.setObjectName("widget_case_detail_video")
@@ -406,18 +410,31 @@ class CaseLogsTab(QWidget):
                 item_ignored.setTextAlignment(Qt.AlignCenter)
                 self.tableWidget.setItem(row, 2, item_ignored)
                 
-                # Case Type과 Detection Type (3, 4번 위치)
+                # Case Type과 Detection Type (3, 4번 위치) - 정렬 없음(기본 왼쪽 정렬)
                 self.tableWidget.setItem(row, 3, QTableWidgetItem(case_type))
                 self.tableWidget.setItem(row, 4, QTableWidgetItem(detection_type))
                 
-                # 시간 정보 (5, 6번 위치로 이동)
-                self.tableWidget.setItem(row, 5, QTableWidgetItem(formatted_start))
-                self.tableWidget.setItem(row, 6, QTableWidgetItem(formatted_end))
+                # 시간 정보 (5, 6번 위치로 이동) - 가운데 정렬
+                item_start = QTableWidgetItem(formatted_start)
+                item_start.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 5, item_start)
                 
-                # 로봇 ID, 사용자, 위치 정보 (7~9번 위치)
-                self.tableWidget.setItem(row, 7, QTableWidgetItem(robot_id))
-                self.tableWidget.setItem(row, 8, QTableWidgetItem(user_id))
-                self.tableWidget.setItem(row, 9, QTableWidgetItem(location))
+                item_end = QTableWidgetItem(formatted_end)
+                item_end.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 6, item_end)
+                
+                # 로봇 ID, 사용자, 위치 정보 (7~9번 위치) - 가운데 정렬
+                item_robot = QTableWidgetItem(robot_id)
+                item_robot.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 7, item_robot)
+                
+                item_user = QTableWidgetItem(user_id)
+                item_user.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 8, item_user)
+                
+                item_location = QTableWidgetItem(location)
+                item_location.setTextAlignment(Qt.AlignCenter)
+                self.tableWidget.setItem(row, 9, item_location)
                 
                 # 나머지 이모지 표시 항목들 (10~14번 위치)
                 for col_idx, value in [
@@ -1603,10 +1620,10 @@ class CaseLogsTab(QWidget):
                 pass
             self.play_icon_label = None
             
-        # 새로운 아이콘 생성 - 배경 완전 투명하게 설정
+        # 새로운 아이콘 생성 - 배경 어둡게 설정 (검정색 + 높은 투명도)
         self.play_icon_label = QLabel(self.widget_case_detail_video)
         self.play_icon_label.setStyleSheet("""
-            background-color: rgba(0, 0, 0, 0.4); 
+            background-color: rgba(0, 0, 0, 0.7); 
             color: white; 
             font-size: 60px; 
             padding: 10px;
