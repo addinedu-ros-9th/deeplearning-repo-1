@@ -1,55 +1,64 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Merged Result",
-  "type": "object",
-  "properties": {
-    "frame_id": {
-      "type": "integer",
-      "description": "프레임 고유 번호"
-    },
-    "timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "description": "프레임 생성 시각 (ISO 8601 형식)"
-    },
-    "detections": {
-      "type": "array",
-      "description": "감지된 객체 목록",
-      "items": {
-        "type": "object",
-        "properties": {
-          "label": {
-            "type": "string",
-            "description": "감지 객체의 종류 (예: knife, person)"
-          },
-          "confidence": {
-            "type": "number",
-            "description": "모델이 판단한 신뢰도 (0~1)"
-          },
-          "box": {
-            "type": "array",
-            "description": "객체 경계 박스 좌표 [x1, y1, x2, y2]",
-            "items": {
-              "type": "number"
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "title": "Detection Image Packet",
+   "type": "object",
+   "properties": {
+      "frame_id": {
+         "type": "integer",
+         "description": "프레임 고유 ID",
+         "minimum": 0
+      },
+      "detections": {
+         "type": "array",
+         "description": "탐지된 객체 리스트",
+         "items": {
+            "type": "object",
+            "properties": {
+               "label": {
+                  "type": "string",
+                  "enum": ["knife", "gun", "lying_down", "cigarette"],
+                  "description": "탐지된 객체 라벨"
+               },
+               "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "신뢰도 (0~1 사이)"
+               },
+               "box": {
+                  "type": "array",
+                  "items": {
+                     "type": "integer"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "description": "[x1, y1, x2, y2] 좌표"
+               }
             },
-            "minItems": 4,
-            "maxItems": 4
-          }
-        },
-        "required": ["label", "confidence", "box"]
+            "required": [
+               "label",
+               "confidence",
+               "box"
+            ],
+            "additionalProperties": false
+         }
+      },
+      "robot_status": {
+         "type": "string",
+         "enum": ["detected", "idle", "moving", "patrolling"],
+         "description": "로봇 상태"
+      },
+      "location": {
+         "type": "string",
+         "enum": ["A", "B", "BASE"],
+         "description": "로봇 위치"
       }
-    },
-    "robot_status": {
-      "type": "string",
-      "enum": ["detected", "patrolling", "moving", "idle"],
-      "description": "로봇 상태 (detected, patrolling, moving, idle 중 하나)"
-    },
-    "location": {
-      "type": "string",
-       "enum": ["BASE", "A", "B"],
-      "description": "로봇의 현재 위치 (예: BASE, A, B)"
-    }
-  },
-  "required": ["frame_id", "timestamp", "detections", "robot_status", "location"],
-  "additionalProperties": false
+   },
+   "required": [
+      "frame_id",
+      "detections",
+      "robot_status",
+      "location"
+   ],
+   "additionalProperties": false
 }

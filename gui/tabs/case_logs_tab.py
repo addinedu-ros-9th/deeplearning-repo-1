@@ -77,8 +77,8 @@ class CaseLogsTab(QWidget):
             self.tableWidget.setHorizontalHeaderLabels([
                 "Case ID", "Case Closed", "Ignored", "Case Type", "Detection Type", 
                 "Start Time", "End Time", "Robot ID", "User Name", "Location", 
-                "Reported to 119", "Reported to 112", "Illegal Warning", "Danger Warning", 
-                "Emergency Warning"
+                "Reported to 119", "Reported to 112", "Illegal", "Danger", 
+                "Emergency"
             ])
             
             # 테이블 열 너비를 내용에 맞게 조정 (자동 늘어나지 않도록 설정)
@@ -290,7 +290,7 @@ class CaseLogsTab(QWidget):
             self.comboBox_action_type.addItem("All Actions")
             action_types = [
                 "Reported to 119", "Reported to 112", "Case Closed", 
-                "Danger Warning", "Emergency Warning", "Illegal Warning", "Ignored"
+                "Danger", "Emergency", "Illegal", "Ignored"
             ]
             
             # 액션 타입 매핑 (영어로만 표시, 매핑 필요 없음)
