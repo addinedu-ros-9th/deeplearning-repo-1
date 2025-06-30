@@ -83,12 +83,11 @@ class DBManager(threading.Thread):
         """사용자 로그인 요청을 처리합니다."""
         user_id = request_data.get('id')
         password = request_data.get('password')
-        is_success, user_name = self._verify_user(user_id, password)
-
+        result_status, user_name = self._verify_user(user_id, password)
         response = {
             "id": user_id,
             "name": user_name, # 인터페이스 명세에 따라 name 키 사용
-            "result": "succeed" if is_success else "fail"
+            "result": result_status
         }
         response_bytes = json.dumps(response, ensure_ascii=False).encode('utf-8')
         header = struct.pack('>I', len(response_bytes))
@@ -97,7 +96,12 @@ class DBManager(threading.Thread):
         conn.sendall(header + response_bytes)
 
     def _verify_user(self, user_id: str, password: str) -> tuple[bool, str | None]:
-        """DB에서 사용자 ID와 비밀번호를 검증합니다."""
+        """
+        DB에서 사용자 ID와 비밀번호를 검증하고, 그 결과를 구체적인 문자열로 반환합니다.
+        - 성공: ('succeed', 사용자 이름)
+        - ID 없음: ('id_error', None)
+        - 비밀번호 틀림: ('password_error', None)
+        """
         db_conn = None
         try:
             db_conn = self._get_connection()
@@ -105,15 +109,25 @@ class DBManager(threading.Thread):
             query = "SELECT password, name FROM user WHERE id = %s"
             cursor.execute(query, (user_id,))
             result = cursor.fetchone()
-            if result and result['password'] == password:
+
+            # 1. ID 존재 여부 확인
+            if not result:
+                print(f"[{self.name}] DB: '{user_id}' 인증 실패 - 존재하지 않는 ID")
+                return "id_error", None
+
+            # 2. 비밀번호 일치 여부 확인
+            if result['password'] == password:
                 user_full_name = result['name']
                 print(f"[{self.name}] DB: '{user_id}' ({user_full_name}) 인증 성공")
-                return True, user_full_name
-            print(f"[{self.name}] DB: '{user_id}' 인증 실패")
-            return False, None
+                return "succeed", user_full_name
+            else:
+                print(f"[{self.name}] DB: '{user_id}' 인증 실패 - 비밀번호 불일치")
+                return "password_error", None
+
         except mysql.connector.Error as err:
             print(f"[{self.name}] DB 오류 (사용자 인증): {err}")
-            return False, None
+            # DB 자체에 문제가 생겼을 경우, 일반적인 'fail'로 처리할 수 있습니다.
+            return "fail", None
         finally:
             if db_conn and db_conn.is_connected():
                 db_conn.close()

@@ -65,11 +65,6 @@ class LoginWindow(QMainWindow):
 
     def handle_login(self):
         """로그인 처리"""
-        if not self.sock:
-            self.setup_connection()
-            if not self.sock:
-                return
-
         user_id = self.input_id.text()
         password = self.input_pw.text()
         message = {
@@ -78,6 +73,11 @@ class LoginWindow(QMainWindow):
         }
 
         try:
+            # 매 로그인 시도마다 새로운 연결 생성
+            self.setup_connection()
+            if not self.sock:
+                return
+
             # 1) body에 개행문자 포함
             body = json.dumps(message).encode('utf-8') + b'\n'
             # 2) 헤더: body 전체 길이 계산
@@ -97,6 +97,10 @@ class LoginWindow(QMainWindow):
 
             # 6) 응답 수신
             response = self.sock.recv(4096)
+            # 응답 검사 - 비어있으면 예외 발생
+            if not response or len(response) < 4:
+                raise ConnectionError("서버로부터 응답이 없거나 불완전한 응답을 받았습니다.")
+                
             if DEBUG:
                 resp_len = int.from_bytes(response[:4], 'big')
                 print(f"{self.DEBUG_TAG['AUTH']} 수신된 응답:")
@@ -165,12 +169,25 @@ class LoginWindow(QMainWindow):
                 else:
                     QMessageBox.warning(self, "로그인 실패", f"알 수 없는 오류가 발생했습니다.\n다시 시도해주세요. (오류 코드: {error_result})")
 
+        except ConnectionError as ce:
+            if DEBUG:
+                print(f"{self.DEBUG_TAG['ERR']} 연결 오류: {ce}")
+            QMessageBox.critical(self, "연결 오류", f"서버와 통신 중 오류가 발생했습니다:\n{ce}")
+            self.sock = None
         except Exception as e:
             if DEBUG:
                 print(f"{self.DEBUG_TAG['ERR']} 처리 실패: {e}")
                 traceback.print_exc()
             QMessageBox.critical(self, "오류", f"로그인 처리 중 오류가 발생했습니다:\n{e}")
             self.sock = None
+        finally:
+            # 통신 완료 후 소켓 종료
+            if self.sock:
+                try:
+                    self.sock.close()
+                    self.sock = None
+                except:
+                    pass
 
     def close_welcome_and_open_main(self, button=None):
         """환영 메시지를 닫고 메인 윈도우를 표시

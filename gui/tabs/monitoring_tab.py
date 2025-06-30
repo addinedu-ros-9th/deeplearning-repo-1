@@ -445,7 +445,11 @@ class MonitoringTab(QWidget):
                 print(f"기지 복귀 명령 전송")
 
     def start_stream(self):
-        """영상 스트리밍을 토글합니다 (시스템은 계속 가동)"""
+        """영상 스트리밍을 토글합니다 (시스템은 계속 가동)
+        
+        중요: 비디오 스트림은 이동 버튼과 완전히 독립적으로 동작합니다.
+        비디오를 중지하거나 시작해도 이동 버튼 상태에는 영향을 주지 않습니다.
+        """
         try:
             # 시스템 초기 활성화 (최초 1회)
             if not self.system_ready:
@@ -460,11 +464,11 @@ class MonitoringTab(QWidget):
                 # 로봇 상태 라벨 업데이트 - 시작 버튼을 눌러서 활성화 후
                 self.robot_status_label.setText("로봇 상태: 순찰 중")  # 기본값은 순찰 중으로 설정
                 
-                # 현재 위치에 따라 이동 버튼 항상 활성화 (system_ready 값과 무관)
+                # 현재 위치에 따라 이동 버튼 초기화 (최초 1회만 실행)
                 self.enable_movement_buttons()
                 
                 if DEBUG:
-                    print("시스템 및 스트리밍 최초 활성화: 이동 버튼 활성화됨")
+                    print("시스템 및 스트리밍 최초 활성화: 이동 버튼 초기화됨")
             
             # 이미 시스템이 활성화된 상태에서는 영상 표시 토글만 수행
             else:
@@ -476,17 +480,15 @@ class MonitoringTab(QWidget):
                     self.btn_start_video_stream.setText("Stop Video Stream")
                     self.live_feed_label.setText("비디오 상태: 스트리밍 활성화됨")
                     
-                    # 이동 버튼 상태 갱신 (streaming 상태와 무관하게 항상 활성화)
-                    self.enable_movement_buttons()
-                    
                     if DEBUG:
-                        print("비디오 스트림 표시 활성화 및 이동 버튼 재활성화")
+                        print("비디오 스트림 표시 활성화 (이동 버튼 상태는 변경하지 않음)")
                 else:
                     # 영상 표시 비활성화 (백그라운드 수신은 계속)
                     self.btn_start_video_stream.setText("Start Video Stream")
                     self.live_feed_label.setText("비디오 상태: 스트리밍 비활성화 - 시작 버튼을 눌러주세요")
+                    
                     if DEBUG:
-                        print("비디오 스트림 표시 중지 (백그라운드에서는 계속 수신)")
+                        print("비디오 스트림 표시 중지 (이동 버튼 상태는 변경하지 않음)")
             
         except Exception as e:
             if DEBUG:

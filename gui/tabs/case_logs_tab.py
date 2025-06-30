@@ -7,16 +7,21 @@ Case Logs Tab Module
 """
 
 import os
+import sys
 import traceback
 import subprocess
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QTableWidgetItem, QHeaderView, QMessageBox)
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtCore import Qt, QDateTime, QUrl
+from PyQt5.QtCore import Qt, QDateTime, QUrl, QTimer
 from PyQt5.uic import loadUi
-# 비디오 재생을 위한 추가 imports
+# 비디오 재생을 위한 imports
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtMultimediaWidgets import QVideoWidget
+# VLC 미디어 플레이어 import
+import vlc
+
+# libva 메시지 표시 레벨 설정 (0: 없음)
+os.environ["LIBVA_MESSAGING_LEVEL"] = "0"
 
 # 디버그 모드
 DEBUG = True
@@ -59,33 +64,82 @@ class CaseLogsTab(QWidget):
         """UI 초기화"""
         try:
             # UI 파일 로드
-            loadUi("gui/ui/case_logs_tap4.ui", self)
+            loadUi("gui/ui/case_logs_tap5.ui", self)
             
-            # 테이블 설정
+            # 테이블 설정 - 사용자가 직접 추가한 헤더 라벨 사용
             self.tableWidget.setColumnCount(15)
             self.tableWidget.setHorizontalHeaderLabels([
-                "case_id", "start_time", "end_time", "case_type", "detection_type", 
-                "robot_id", "location", "user_id", "is_ignored", "is_119_reported", 
-                "is_112_reported", "is_illegal_warned", "is_danger_warned", 
-                "is_emergency_warned", "is_case_closed"
+                "Case ID", "Start Time", "End Time", "Case Type", "Detection Type", 
+                "Robot ID", "User Name", "Location", "Ignored", "Reported to 119", 
+                "Reported to 112", "Illegal Warning", "Danger Warning", 
+                "Emergency Warning", "Case Closed"
             ])
             
-            # 테이블 열 너비 자동 조정
-            self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+            # 테이블 열 너비를 내용에 맞게 조정 (자동 늘어나지 않도록 설정)
+            self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
+            # 내용에 맞게 열 너비 초기 설정후 고정
+            self.tableWidget.resizeColumnsToContents()
+            
+            # 특정 열의 너비 설정 (너비가 부족한 열만 추가로 조정)
+            self.tableWidget.setColumnWidth(1, 150)  # Start Time 열
+            self.tableWidget.setColumnWidth(2, 150)  # End Time 열
+            
             self.tableWidget.horizontalHeader().setStretchLastSection(False)
             
             # 기본 인덱스(행번호) 숨기기
             self.tableWidget.verticalHeader().setVisible(False)
             
-            # 비디오 위젯 설정 - QWidget을 QVideoWidget으로 대체
+            # 비디오 위젯 준비 (VLC 사용 시에는 직접 위젯 설정이 필요 없음)
+            # VLC는 widget_case_detail_video의 winId를 직접 사용함
+            self.widget_case_detail_video.setObjectName("widget_case_detail_video")
+            
+            # 기존 QMediaPlayer는 유지 (필요시 fallback으로 사용)
+            self.qmediaPlayer = QMediaPlayer(self)
             self.videoWidget = QVideoWidget(self.widget_case_detail_video)
             self.videoWidget.setGeometry(self.widget_case_detail_video.rect())
             self.videoWidget.setObjectName("videoWidget")
-            self.videoWidget.show()
+            self.videoWidget.hide()  # VLC 사용 시에는 숨김
+            self.qmediaPlayer.setVideoOutput(self.videoWidget)
             
-            # 미디어 플레이어 초기화
-            self.mediaPlayer = QMediaPlayer(self)
-            self.mediaPlayer.setVideoOutput(self.videoWidget)
+            # VLC 미디어 플레이어 초기화
+            self.instance = vlc.Instance('--quiet')
+            self.mediaPlayer = self.instance.media_player_new()
+            
+            # VLC 미디어 플레이어를 위젯에 연결 (Linux)
+            if sys.platform.startswith('linux'):
+                self.mediaPlayer.set_xwindow(int(self.widget_case_detail_video.winId()))
+            # Windows의 경우
+            elif sys.platform == "win32":
+                self.mediaPlayer.set_hwnd(int(self.widget_case_detail_video.winId()))
+            # Mac OS X의 경우
+            elif sys.platform == "darwin":
+                self.mediaPlayer.set_nsobject(int(self.widget_case_detail_video.winId()))
+                
+            # 비디오 영역 클릭 이벤트 처리를 위한 이벤트 필터 설치
+            self.widget_case_detail_video.installEventFilter(self)
+            self.widget_case_detail_video.setCursor(Qt.PointingHandCursor)  # 커서 변경으로 클릭 가능함을 표시
+                
+            # 재생 상태 추적을 위한 변수
+            self.is_playing = False
+            self.base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'main_server')
+            
+            # 미디어 컨트롤 버튼 연결
+            self.pushButton_run.clicked.connect(self.toggle_playback)       # 재생/일시정지 토글 버튼
+            self.pushButton_stop.clicked.connect(self.stop_media)           # ■ 정지 버튼
+            self.pushButton_seek_forward.clicked.connect(self.seek_forward) # ▶▶ 앞으로 5초 이동
+            self.pushButton_seek_backward.clicked.connect(self.seek_backward) # ◀◀ 뒤로 5초 이동
+            
+            # 슬라이더 설정
+            self.horizontalSlider_running_time.setRange(0, 0)
+            self.horizontalSlider_volume.setRange(0, 100)
+            self.horizontalSlider_volume.setValue(50)  # 기본 볼륨 50%
+            
+            # VLC 볼륨 설정
+            self.mediaPlayer.audio_set_volume(50)
+            
+            # 슬라이더 이벤트 연결
+            self.horizontalSlider_running_time.sliderMoved.connect(self.set_position)
+            self.horizontalSlider_volume.valueChanged.connect(self.set_volume)
             
             # 날짜 필터 초기화 (현재 날짜 기준 7일 전부터)
             current_datetime = QDateTime.currentDateTime()
@@ -132,9 +186,9 @@ class CaseLogsTab(QWidget):
         # 테이블 업데이트 (정렬은 update_table 내부에서 수행)
         self.update_table()
         
-        # 로그 데이터가 없으면 메시지 표시
+        # 로그 데이터가 없으면 메시지 표시 (영어로)
         if not self.logs:
-            QMessageBox.information(self, "데이터 없음", "로그 데이터가 없습니다.\n실제 DB에 데이터가 있는지 확인하세요.")
+            QMessageBox.information(self, "No Data", "No log data available.\nPlease check if there is data in the actual DB.")
         
     def populate_comboboxes(self):
         """콤보박스 옵션 채우기"""
@@ -142,17 +196,38 @@ class CaseLogsTab(QWidget):
             if DEBUG:
                 print(f"{DEBUG_TAG['INIT']} 콤보박스 옵션 설정")
                 
-            # 케이스 타입 콤보박스
+            # 케이스 타입 콤보박스 (영어로 표시, 첫 글자 대문자)
             self.comboBox_case_type.clear()
             self.comboBox_case_type.addItem("All Case Types")
             case_types = sorted(set(log.get("case_type", "") for log in self.logs if log.get("case_type")))
-            self.comboBox_case_type.addItems(case_types)
             
-            # 탐지 타입 콤보박스
+            # 케이스 타입 사용자 친화적으로 표시 (영어로, 첫 글자 대문자)
+            case_type_map = {
+                "danger": "Danger",
+                "emergency": "Emergency",
+                "illegal": "Illegal"
+            }
+            
+            for case_type in case_types:
+                friendly_name = case_type_map.get(case_type, case_type)
+                self.comboBox_case_type.addItem(friendly_name, case_type)  # 표시 이름, 실제 값
+            
+            # 탐지 타입 콤보박스 (영어로 표시, 첫 글자 대문자)
             self.comboBox_detection_type.clear()
             self.comboBox_detection_type.addItem("All Detection Types")
             detection_types = sorted(set(log.get("detection_type", "") for log in self.logs if log.get("detection_type")))
-            self.comboBox_detection_type.addItems(detection_types)
+            
+            # 탐지 타입 사용자 친화적으로 표시 (영어로, 첫 글자 대문자)
+            detection_type_map = {
+                "knife": "Knife",
+                "gun": "Gun",
+                "lying_down": "Lying_Down",
+                "cigarette": "Cigarette"
+            }
+            
+            for detection_type in detection_types:
+                friendly_name = detection_type_map.get(detection_type, detection_type)
+                self.comboBox_detection_type.addItem(friendly_name, detection_type)  # 표시 이름, 실제 값
             
             # 로봇 ID 콤보박스
             self.comboBox_robot_id.clear()
@@ -161,26 +236,48 @@ class CaseLogsTab(QWidget):
             robot_ids = sorted(robot_ids)
             self.comboBox_robot_id.addItems(robot_ids)
             
-            # 위치 콤보박스
+            # 로봇 ID 콤보박스 (영어로 표시)
+            self.comboBox_robot_id.clear()
+            self.comboBox_robot_id.addItem("All Robots")
+            robot_ids = sorted(set(log.get("robot_id", "") for log in self.logs if log.get("robot_id")))
+            self.comboBox_robot_id.addItems(robot_ids)
+            
+            # 위치 콤보박스 (영어로 표시)
             self.comboBox_location_id.clear()
             self.comboBox_location_id.addItem("All Locations")
             locations = sorted(set(str(log.get("location", "")) for log in self.logs if log.get("location") is not None))
-            self.comboBox_location_id.addItems(locations)
             
-            # 사용자 계정 콤보박스
+            # 위치 매핑 (영어로 표시)
+            location_map = {
+                "A": "A",
+                "B": "B",
+                "BASE": "Base"
+            }
+            
+            for location in locations:
+                friendly_name = location_map.get(location, location)
+                self.comboBox_location_id.addItem(friendly_name, location)
+            
+            # 사용자 계정 콤보박스 (영어로 표시)
             self.comboBox_user_account.clear()
             self.comboBox_user_account.addItem("All Users")
             user_ids = sorted(set(log.get("user_id", "") for log in self.logs if log.get("user_id")))
             self.comboBox_user_account.addItems(user_ids)
             
-            # 액션 타입 콤보박스
+            # 액션 타입 콤보박스 (영어로 표시)
             self.comboBox_action_type.clear()
             self.comboBox_action_type.addItem("All Actions")
             action_types = [
-                "119_report", "112_report", "case_closed", 
-                "danger_warning", "emergency_warning", "illegal_warning"
+                "Reported to 119", "Reported to 112", "Case Closed", 
+                "Danger Warning", "Emergency Warning", "Illegal Warning", "Ignored"
             ]
-            self.comboBox_action_type.addItems(action_types)
+            
+            # 액션 타입 매핑 (영어로만 표시, 매핑 필요 없음)
+            action_type_map = {}  # 영어로만 표시하므로 매핑 필요 없음
+            
+            for action in action_types:
+                friendly_name = action_type_map.get(action, action)
+                self.comboBox_action_type.addItem(friendly_name, action)
             
             if DEBUG:
                 print(f"{DEBUG_TAG['INIT']} 콤보박스 옵션 설정 완료")
@@ -217,11 +314,31 @@ class CaseLogsTab(QWidget):
                 case_id = str(log.get("case_id", "Unknown"))
                 start_time = log.get("start_time", "Unknown")
                 end_time = log.get("end_time", "Unknown")
-                case_type = log.get("case_type", "Unknown")
-                detection_type = log.get("detection_type", "Unknown")
+                
+                # 사용자 친화적인 이름으로 표시 & 첫글자 대문자로 변환
+                case_type_raw = log.get("case_type", "Unknown")
+                case_type_map = {
+                    "danger": "Danger",
+                    "emergency": "Emergency",
+                    "illegal": "Illegal",
+                    # Unknown은 이미 대문자로 시작함
+                }
+                # 매핑된 값이 없을 경우 첫 글자만 대문자로 변환
+                case_type = case_type_map.get(case_type_raw, case_type_raw.capitalize())
+                
+                detection_type_raw = log.get("detection_type", "Unknown")
+                detection_type_map = {
+                    "knife": "Knife",
+                    "gun": "Gun",                    
+                    "lying_down": "Lying_Down",
+                    "cigarette": "Cigarette"
+                }
+                # 매핑된 값이 없을 경우 첫 글자만 대문자로 변환
+                detection_type = detection_type_map.get(detection_type_raw, detection_type_raw.capitalize())
+                
                 robot_id = log.get("robot_id", "Unknown")
-                location = log.get("location", "Unknown")
                 user_id = log.get("user_id", "Unknown")
+                location = log.get("location", "Unknown")
                 is_ignored = str(log.get("is_ignored", "Unknown"))
                 is_119_reported = str(log.get("is_119_reported", "Unknown"))
                 is_112_reported = str(log.get("is_112_reported", "Unknown"))
@@ -243,22 +360,24 @@ class CaseLogsTab(QWidget):
                 except:
                     formatted_end = end_time
                 
-                # 테이블에 아이템 추가
+                # 테이블에 아이템 추가 - 새로운 컬럼 이름에 맞게 데이터 배치
                 self.tableWidget.setItem(row, 0, QTableWidgetItem(case_id))
                 self.tableWidget.setItem(row, 1, QTableWidgetItem(formatted_start))
                 self.tableWidget.setItem(row, 2, QTableWidgetItem(formatted_end))
                 self.tableWidget.setItem(row, 3, QTableWidgetItem(case_type))
                 self.tableWidget.setItem(row, 4, QTableWidgetItem(detection_type))
                 self.tableWidget.setItem(row, 5, QTableWidgetItem(robot_id))
-                self.tableWidget.setItem(row, 6, QTableWidgetItem(location))
-                self.tableWidget.setItem(row, 7, QTableWidgetItem(user_id))
-                self.tableWidget.setItem(row, 8, QTableWidgetItem(is_ignored))
-                self.tableWidget.setItem(row, 9, QTableWidgetItem(is_119_reported))
-                self.tableWidget.setItem(row, 10, QTableWidgetItem(is_112_reported))
-                self.tableWidget.setItem(row, 11, QTableWidgetItem(is_illegal_warned))
-                self.tableWidget.setItem(row, 12, QTableWidgetItem(is_danger_warned))
-                self.tableWidget.setItem(row, 13, QTableWidgetItem(is_emergency_warned))
-                self.tableWidget.setItem(row, 14, QTableWidgetItem(is_case_closed))
+                self.tableWidget.setItem(row, 6, QTableWidgetItem(user_id))
+                self.tableWidget.setItem(row, 7, QTableWidgetItem(location))
+                
+                # 이진 속성들은 0/1 대신 ✅/❌로 표시
+                self.tableWidget.setItem(row, 8, QTableWidgetItem("✅" if is_ignored == "1" else "❌"))
+                self.tableWidget.setItem(row, 9, QTableWidgetItem("✅" if is_119_reported == "1" else "❌"))
+                self.tableWidget.setItem(row, 10, QTableWidgetItem("✅" if is_112_reported == "1" else "❌"))
+                self.tableWidget.setItem(row, 11, QTableWidgetItem("✅" if is_illegal_warned == "1" else "❌"))
+                self.tableWidget.setItem(row, 12, QTableWidgetItem("✅" if is_danger_warned == "1" else "❌"))
+                self.tableWidget.setItem(row, 13, QTableWidgetItem("✅" if is_emergency_warned == "1" else "❌"))
+                self.tableWidget.setItem(row, 14, QTableWidgetItem("✅" if is_case_closed == "1" else "❌"))
                 
             # 로그 수 표시 업데이트
             self.label_number_of_log.setText(f"Number of Logs: {len(self.filtered_logs)}")
@@ -331,20 +450,30 @@ class CaseLogsTab(QWidget):
             if selected_user_account:
                 filtered = [log for log in filtered if log.get("user_id") == selected_user_account]
             
-            # 액션 타입 필터링
+            # 액션 타입 필터링 (itemData와 표시 이름을 둘 다 체크)
             if selected_action_type:
-                if selected_action_type == "119_report":
+                # 데이터 항목이 있는지 확인
+                action_idx = self.comboBox_action_type.currentIndex()
+                action_data = self.comboBox_action_type.itemData(action_idx)
+                
+                # 아이템 데이터가 있으면 그것을 사용, 없으면 표시 텍스트 사용
+                action_type = action_data if action_data else selected_action_type
+                
+                # 액션 타입에 따른 필터링
+                if "119" in action_type or "119 신고" == selected_action_type:
                     filtered = [log for log in filtered if log.get("is_119_reported") == 1]
-                elif selected_action_type == "112_report":
+                elif "112" in action_type or "112 신고" == selected_action_type:
                     filtered = [log for log in filtered if log.get("is_112_reported") == 1]
-                elif selected_action_type == "case_closed":
+                elif "Case Closed" in action_type or "케이스 종료" == selected_action_type:
                     filtered = [log for log in filtered if log.get("is_case_closed") == 1]
-                elif selected_action_type == "danger_warning":
+                elif "Danger" in action_type or "위험 경고" == selected_action_type:
                     filtered = [log for log in filtered if log.get("is_danger_warned") == 1]
-                elif selected_action_type == "emergency_warning":
+                elif "Emergency" in action_type or "응급 경고" == selected_action_type:
                     filtered = [log for log in filtered if log.get("is_emergency_warned") == 1]
-                elif selected_action_type == "illegal_warning":
+                elif "Illegal" in action_type or "불법 행위 경고" == selected_action_type:
                     filtered = [log for log in filtered if log.get("is_illegal_warned") == 1]
+                elif "Ignored" in action_type or "무시됨" == selected_action_type:
+                    filtered = [log for log in filtered if log.get("is_ignored") == 1]
             
             # 필터링된 결과 저장 및 테이블 업데이트
             self.filtered_logs = filtered
@@ -419,68 +548,151 @@ class CaseLogsTab(QWidget):
         try:
             if not self.selected_log:
                 return
+                
+            if DEBUG:
+                print(f"{DEBUG_TAG['RECV']} 로그 상세 정보 표시 시작")
             
-            # 기본 경로 설정 (main_server 폴더 기준)
-            base_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'main_server')
+            # 상태 표시 초기화 (영어로 표시)
+            self.label_media_status.setText("Ready")
+            self.label_running_time.setText("00:00:00 / 00:00:00")
             
-            # 이미지 표시 (images 폴더 내 이미지 파일)
+            # 비디오 재생 중지 및 초기화 (새 로그 선택 시)
+            self.stop_video_playback()
+            
+            # 이미지 경로를 사용하여 썸네일 표시
             image_path = self.selected_log.get("image_path", "")
             if image_path:
-                full_image_path = os.path.join(base_path, image_path)
+                full_image_path = os.path.join(self.base_path, image_path)
                 if os.path.exists(full_image_path):
+                    # 이미지를 위젯에 표시하기 위한 코드
+                    from PyQt5.QtGui import QPixmap
                     pixmap = QPixmap(full_image_path)
-                    scaled_pixmap = pixmap.scaled(
-                        self.label_case_detail_image.width(),
-                        self.label_case_detail_image.height(),
-                        Qt.KeepAspectRatio
-                    )
-                    self.label_case_detail_image.setPixmap(scaled_pixmap)
-                    self.label_case_detail_image.setAlignment(Qt.AlignCenter)
-                    
-                    if DEBUG:
-                        print(f"{DEBUG_TAG['RECV']} 이미지 로드: {full_image_path}")
+                    if not pixmap.isNull():
+                        # 위젯 크기에 맞게 이미지 조정
+                        if DEBUG:
+                            print(f"{DEBUG_TAG['RECV']} 썸네일 이미지 표시: {full_image_path}")
+                            
+                        # 썸네일 레이블 생성 또는 업데이트
+                        if not hasattr(self, 'thumbnail_label'):
+                            from PyQt5.QtWidgets import QLabel
+                            self.thumbnail_label = QLabel(self.widget_case_detail_video)
+                            self.thumbnail_label.setGeometry(self.widget_case_detail_video.rect())
+                            self.thumbnail_label.setAlignment(Qt.AlignCenter)
+                        
+                        self.thumbnail_label.setPixmap(pixmap.scaled(
+                            self.widget_case_detail_video.width(),
+                            self.widget_case_detail_video.height(),
+                            Qt.KeepAspectRatio,
+                            Qt.SmoothTransformation
+                        ))
+                        self.thumbnail_label.show()
+                        
+                        # 재생 아이콘 레이블 생성 (크기 및 스타일 개선)
+                        if not hasattr(self, 'play_icon_label'):
+                            self.play_icon_label = QLabel(self.widget_case_detail_video)
+                            self.play_icon_label.setStyleSheet("background-color: rgba(0, 0, 0, 150); color: white; font-size: 48px; border-radius: 30px; padding: 10px;")
+                            self.play_icon_label.setAlignment(Qt.AlignCenter)
+                            self.play_icon_label.setText("▶")
+                            # 적절한 크기로 설정 (약간 더 크게)
+                            play_icon_size = min(self.widget_case_detail_video.width(), self.widget_case_detail_video.height()) // 3
+                            self.play_icon_label.setFixedSize(play_icon_size, play_icon_size)
+                            # 중앙에 위치
+                            self.play_icon_label.move(
+                                (self.widget_case_detail_video.width() - play_icon_size) // 2,
+                                (self.widget_case_detail_video.height() - play_icon_size) // 2
+                            )
+                            self.play_icon_label.show()
+                        else:
+                            # 기존 플레이 아이콘 크기 및 위치 업데이트
+                            play_icon_size = min(self.widget_case_detail_video.width(), self.widget_case_detail_video.height()) // 3
+                            self.play_icon_label.setFixedSize(play_icon_size, play_icon_size)
+                            self.play_icon_label.move(
+                                (self.widget_case_detail_video.width() - play_icon_size) // 2,
+                                (self.widget_case_detail_video.height() - play_icon_size) // 2
+                            )
+                            self.play_icon_label.show()
+                        
+                        # 재생 버튼 아이콘 오버레이 (VLC의 marquee 기능 활용)
+                        if hasattr(self, 'mediaPlayer'):
+                            # 마커퀴 지우기
+                            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 0)
+                            # 새 마커퀴 설정 (재생 버튼 아이콘)
+                            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 1)
+                            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Size, 60)  # 크기
+                            self.mediaPlayer.video_set_marquee_string(vlc.VideoMarqueeOption.Text, "▶")  # 재생 아이콘
+                            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Position, 8)  # 중앙 위치
+                            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Opacity, 200)  # 반투명
+                        
+                    else:
+                        if DEBUG:
+                            print(f"{DEBUG_TAG['ERR']} 썸네일 이미지 로드 실패: {full_image_path}")
                 else:
-                    self.label_case_detail_image.setText(f"이미지 없음\n({image_path})")
-                    self.label_case_detail_image.setAlignment(Qt.AlignCenter)
-                    
                     if DEBUG:
-                        print(f"{DEBUG_TAG['ERR']} 이미지 파일을 찾을 수 없음: {full_image_path}")
-            else:
-                self.label_case_detail_image.setText("이미지 정보 없음")
-                self.label_case_detail_image.setAlignment(Qt.AlignCenter)
+                        print(f"{DEBUG_TAG['ERR']} 썸네일 이미지 파일을 찾을 수 없음: {full_image_path}")
             
-            # 비디오 재생 (QVideoWidget 사용)
+            # 비디오 경로 확인 및 준비 (재생은 안함, 재생 버튼 클릭 시에만 재생)
             video_path = self.selected_log.get("video_path", "")
             if video_path:
-                full_video_path = os.path.join(base_path, video_path)
+                full_video_path = os.path.join(self.base_path, video_path)
                 if os.path.exists(full_video_path):
-                    # 미디어 플레이어 설정
-                    media_content = QMediaContent(QUrl.fromLocalFile(full_video_path))
-                    self.mediaPlayer.setMedia(media_content)
+                    # 미디어 컨트롤 활성화
+                    self.pushButton_run.setText("▶")  # 재생 버튼으로 설정
+                    self.pushButton_run.setEnabled(True)
+                    self.pushButton_stop.setEnabled(False)  # 아직 재생 시작 전이므로 정지 비활성화
+                    self.pushButton_seek_forward.setEnabled(False)
+                    self.pushButton_seek_backward.setEnabled(False)
                     
-                    # 비디오 자동 재생
-                    self.mediaPlayer.play()
+                    # VLC 미디어 설정 (재생은 안함)
+                    media = self.instance.media_new(full_video_path)
+                    self.mediaPlayer.set_media(media)
+                    
+                    # 볼륨 설정 초기화
+                    volume = self.horizontalSlider_volume.value()
+                    self.mediaPlayer.audio_set_volume(volume)
+                    
+                    # 재생 시간 정보 업데이트를 위한 타이머
+                    if hasattr(self, 'timer') and self.timer.isActive():
+                        self.timer.stop()
+                    
+                    self.timer = QTimer(self)
+                    self.timer.setInterval(500)  # 0.5초마다 업데이트 (더 반응성 좋게)
+                    self.timer.timeout.connect(self.update_time_labels)
+                    self.timer.start()
                     
                     if DEBUG:
-                        print(f"{DEBUG_TAG['RECV']} 비디오 재생 시작: {full_video_path}")
+                        print(f"{DEBUG_TAG['RECV']} 비디오 재생 준비 완료: {full_video_path}")
                 else:
-                    # 미디어 플레이어 초기화
-                    self.mediaPlayer.setMedia(QMediaContent())
+                    # 상태 표시 초기화 (영어로 표시)
+                    self.label_media_status.setText("No Video File")
+                    self.label_running_time.setText("00:00:00 / 00:00:00")
+                    
+                    # 미디어 컨트롤 비활성화
+                    self.pushButton_run.setEnabled(False)
+                    self.pushButton_stop.setEnabled(False)
+                    self.pushButton_seek_forward.setEnabled(False)
+                    self.pushButton_seek_backward.setEnabled(False)
                     
                     if DEBUG:
                         print(f"{DEBUG_TAG['ERR']} 비디오 파일을 찾을 수 없음: {full_video_path}")
             else:
-                # 미디어 플레이어 초기화
-                self.mediaPlayer.setMedia(QMediaContent())
+                # 상태 표시 초기화 (영어로 표시)
+                self.label_media_status.setText("No Video Info")
+                self.label_running_time.setText("00:00:00 / 00:00:00")
                 
-            # 추가 이벤트 상세 정보 표시
-            case_info = f"케이스 ID: {self.selected_log.get('id', 'Unknown')}\n"
-            case_info += f"케이스 유형: {self.selected_log.get('case_type', 'Unknown')}\n"
-            case_info += f"탐지 유형: {self.selected_log.get('detection_type', 'Unknown')}\n"
-            case_info += f"로봇 ID: {self.selected_log.get('robot_id', 'Unknown')}\n"
-            case_info += f"위치: {self.selected_log.get('location', 'Unknown')}\n"
-            case_info += f"사용자: {self.selected_log.get('user_id', 'Unknown')}\n"
-            case_info += f"시작 시간: {self.selected_log.get('start_time', 'Unknown')}\n"
+                # 미디어 컨트롤 비활성화
+                self.pushButton_run.setEnabled(False)
+                self.pushButton_stop.setEnabled(False)
+                self.pushButton_seek_forward.setEnabled(False)
+                self.pushButton_seek_backward.setEnabled(False)
+                
+            # 추가 이벤트 상세 정보 표시 (영어로 표시)
+            case_info = f"Case ID: {self.selected_log.get('case_id', 'Unknown')}\n"
+            case_info += f"Case Type: {self.selected_log.get('case_type', 'Unknown').capitalize()}\n"
+            case_info += f"Detection Type: {self.selected_log.get('detection_type', 'Unknown').capitalize()}\n"
+            case_info += f"Robot ID: {self.selected_log.get('robot_id', 'Unknown')}\n"
+            case_info += f"Location: {self.selected_log.get('location', 'Unknown')}\n"
+            case_info += f"User: {self.selected_log.get('user_id', 'Unknown')}\n"
+            case_info += f"Start Time: {self.selected_log.get('start_time', 'Unknown')}\n"
             case_info += f"종료 시간: {self.selected_log.get('end_time', 'Unknown')}\n"
             
             # 선택한 행에 대한 상세 정보를 표시할 라벨이 있다면 활용
@@ -520,13 +732,450 @@ class CaseLogsTab(QWidget):
     
     def stop_video_playback(self):
         """비디오 재생 중지"""
+        # VLC 미디어 플레이어 중지
         if hasattr(self, 'mediaPlayer'):
             self.mediaPlayer.stop()
+            
+            # 타이머가 실행 중이면 중지
+            if hasattr(self, 'timer') and self.timer.isActive():
+                self.timer.stop()
+            
+            # 재생 상태 업데이트
+            self.is_playing = False
+            
+            # 미디어 컨트롤 상태 업데이트
+            self.pushButton_run.setText("▶")  # 재생 버튼으로 설정
+            self.pushButton_run.setEnabled(True)
+            self.pushButton_stop.setEnabled(False)
+            self.pushButton_seek_forward.setEnabled(False)
+            self.pushButton_seek_backward.setEnabled(False)
+            
+            # 상태 표시 초기화
+            if hasattr(self, 'label_media_status'):
+                self.label_media_status.setText("Stopped")
+            if hasattr(self, 'label_running_time'):
+                self.label_running_time.setText("00:00:00 / 00:00:00")
             
             if DEBUG:
                 print(f"{DEBUG_TAG['SEND']} 비디오 재생 중지")
     
+    def resizeEvent(self, event):
+        """위젯 크기 변경 이벤트 처리"""
+        super().resizeEvent(event)
+        
+        # 비디오 위젯 크기 조정
+        if hasattr(self, 'videoWidget') and hasattr(self, 'widget_case_detail_video'):
+            self.videoWidget.setGeometry(self.widget_case_detail_video.rect())
+            
+        # 썸네일 크기 조정
+        if hasattr(self, 'thumbnail_label') and hasattr(self, 'widget_case_detail_video'):
+            self.thumbnail_label.setGeometry(self.widget_case_detail_video.rect())
+            if hasattr(self, 'thumbnail_label') and self.thumbnail_label.pixmap():
+                self.thumbnail_label.setPixmap(self.thumbnail_label.pixmap().scaled(
+                    self.widget_case_detail_video.width(),
+                    self.widget_case_detail_video.height(),
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                ))
+                
+        # 플레이 아이콘 크기 및 위치 조정
+        if hasattr(self, 'play_icon_label') and hasattr(self, 'widget_case_detail_video'):
+            play_icon_size = min(self.widget_case_detail_video.width(), self.widget_case_detail_video.height()) // 3
+            self.play_icon_label.setFixedSize(play_icon_size, play_icon_size)
+            self.play_icon_label.move(
+                (self.widget_case_detail_video.width() - play_icon_size) // 2,
+                (self.widget_case_detail_video.height() - play_icon_size) // 2
+            )
+    
     def closeEvent(self, event):
-        """위젯 종료 시 비디오 재생 중지"""
+        """위젯 종료 시 비디오 재생 중지 및 리소스 정리"""
         self.stop_video_playback()
+        
+        # 타이머 정리
+        if hasattr(self, 'timer') and self.timer.isActive():
+            self.timer.stop()
+            
         super().closeEvent(event)
+    
+    def play_media(self):
+        """미디어 재생 또는 재개 (현재는 toggle_playback으로 리다이렉트)"""
+        # 호환성을 위해 유지하되 toggle_playback으로 리다이렉트
+        self.toggle_playback()
+    
+    def pause_media(self):
+        """미디어 일시 정지 (현재는 재생 중일 때만 toggle_playback으로 리다이렉트)"""
+        # 호환성을 위해 유지하되 toggle_playback으로 리다이렉트
+        if hasattr(self, 'mediaPlayer') and self.is_playing:
+            self.toggle_playback()
+    
+    def stop_media(self):
+        """미디어 정지 및 초기 화면으로 돌아가기 (썸네일 표시)"""
+        if hasattr(self, 'mediaPlayer'):
+            # 비디오 정지
+            self.mediaPlayer.stop()
+            self.is_playing = False
+            
+            # 컨트롤 버튼 상태 업데이트
+            self.pushButton_run.setText("▶")  # 재생 버튼으로 설정
+            self.pushButton_run.setEnabled(True)
+            self.pushButton_stop.setEnabled(False)
+            self.pushButton_seek_forward.setEnabled(False)
+            self.pushButton_seek_backward.setEnabled(False)
+            
+            # 슬라이더 및 시간 표시 즉시 초기화
+            self.horizontalSlider_running_time.setValue(0)
+            self.label_running_time.setText("00:00:00 / 00:00:00")
+            
+            # 정지 상태 표시 (영어로 표시)
+            self.label_media_status.setText("Stopped")
+            
+            # 현재 선택된 로그가 있으면 해당 이미지를 다시 가져와 썸네일로 표시 (이미지 오류 방지)
+            if self.selected_log:
+                image_path = self.selected_log.get("image_path", "")
+                if image_path:
+                    full_image_path = os.path.join(self.base_path, image_path)
+                    if os.path.exists(full_image_path):
+                        # 이미지를 다시 로드
+                        from PyQt5.QtGui import QPixmap
+                        pixmap = QPixmap(full_image_path)
+                        if not pixmap.isNull() and hasattr(self, 'thumbnail_label'):
+                            self.thumbnail_label.setPixmap(pixmap.scaled(
+                                self.widget_case_detail_video.width(),
+                                self.widget_case_detail_video.height(),
+                                Qt.KeepAspectRatio,
+                                Qt.SmoothTransformation
+                            ))
+                            self.thumbnail_label.show()
+                            
+                            if DEBUG:
+                                print(f"{DEBUG_TAG['RECV']} 정지 후 썸네일 이미지 재로드: {full_image_path}")
+                        else:
+                            if hasattr(self, 'thumbnail_label'):
+                                self.thumbnail_label.clear()
+                                self.thumbnail_label.hide()
+            
+            # 플레이 아이콘 다시 표시
+            if hasattr(self, 'play_icon_label'):
+                self.play_icon_label.show()
+                
+            # 재생 아이콘 표시 (vlc marquee 사용)
+            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 1)
+            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Size, 60)
+            self.mediaPlayer.video_set_marquee_string(vlc.VideoMarqueeOption.Text, "▶")
+            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Position, 8)
+            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Opacity, 200)
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 미디어 정지 및 썸네일로 돌아감 (▶ 아이콘 표시)")
+    
+    def restart_media(self):
+        """미디어 처음부터 재생"""
+        if hasattr(self, 'mediaPlayer'):
+            self.mediaPlayer.stop()
+            self.mediaPlayer.set_time(0)
+            self.mediaPlayer.play()
+            self.is_playing = True
+            self.pushButton_run.setText("❚❚")  # 일시정지 버튼으로 변경
+            
+            # 타이머 시작 또는 재시작
+            if not hasattr(self, 'timer') or not self.timer.isActive():
+                self.timer = QTimer(self)
+                self.timer.setInterval(1000)
+                self.timer.timeout.connect(self.update_time_labels)
+                self.timer.start()
+                
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 미디어 처음부터 재생")
+    
+    def set_volume(self, volume):
+        """볼륨 설정"""
+        if hasattr(self, 'mediaPlayer'):
+            self.mediaPlayer.audio_set_volume(volume)
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 볼륨 설정: {volume}%")
+    
+    def set_position(self, position):
+        """재생 위치 설정 (슬라이더 이동 시 호출)"""
+        if hasattr(self, 'mediaPlayer'):
+            # 위치 설정
+            self.mediaPlayer.set_time(position)
+            
+            # 위치 설정 후 즉시 시간 표시 업데이트 (타이머 대기 없이)
+            try:
+                # 전체 길이
+                total_duration = self.mediaPlayer.get_length()
+                if total_duration <= 0:
+                    total_duration = 0
+                    
+                # 시간 문자열 포맷팅
+                position_sec = position // 1000
+                duration_sec = total_duration // 1000
+                
+                pos_h = position_sec // 3600
+                pos_m = (position_sec % 3600) // 60
+                pos_s = position_sec % 60
+                
+                dur_h = duration_sec // 3600
+                dur_m = (duration_sec % 3600) // 60
+                dur_s = duration_sec % 60
+                
+                time_str = f"{pos_h:02d}:{pos_m:02d}:{pos_s:02d} / {dur_h:02d}:{dur_m:02d}:{dur_s:02d}"
+                self.label_running_time.setText(time_str)
+            except Exception as e:
+                if DEBUG:
+                    print(f"{DEBUG_TAG['ERR']} 시간 즉시 업데이트 오류: {e}")
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 재생 위치 설정: {position}ms")
+    
+    def seek_forward(self):
+        """현재 위치에서 5초 앞으로 이동"""
+        if not hasattr(self, 'mediaPlayer'):
+            return
+            
+        # 현재 위치 가져오기 (밀리초)
+        current_position = self.mediaPlayer.get_time()
+        if current_position < 0:
+            current_position = 0
+            
+        new_position = current_position + 5000  # 5초(5000밀리초) 앞으로
+        
+        # 전체 길이보다 크면 영상 끝으로 이동
+        total_duration = self.mediaPlayer.get_length()
+        if total_duration > 0 and new_position > total_duration:
+            new_position = total_duration
+            
+        # 위치 설정
+        self.mediaPlayer.set_time(new_position)
+        
+        # 위치 설정 후 즉시 시간 표시 업데이트 (타이머 대기 없이)
+        try:
+            # 시간 문자열 포맷팅
+            position_sec = new_position // 1000
+            duration_sec = total_duration // 1000
+            
+            pos_h = position_sec // 3600
+            pos_m = (position_sec % 3600) // 60
+            pos_s = position_sec % 60
+            
+            dur_h = duration_sec // 3600
+            dur_m = (duration_sec % 3600) // 60
+            dur_s = duration_sec % 60
+            
+            time_str = f"{pos_h:02d}:{pos_m:02d}:{pos_s:02d} / {dur_h:02d}:{dur_m:02d}:{dur_s:02d}"
+            self.label_running_time.setText(time_str)
+            
+            # 슬라이더 값도 즉시 업데이트
+            self.horizontalSlider_running_time.setValue(new_position)
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 시간 즉시 업데이트 오류: {e}")
+        
+        if DEBUG:
+            print(f"{DEBUG_TAG['SEND']} 5초 앞으로 이동: {current_position}ms → {new_position}ms")
+    
+    def seek_backward(self):
+        """현재 위치에서 5초 뒤로 이동"""
+        if not hasattr(self, 'mediaPlayer'):
+            return
+            
+        # 현재 위치 가져오기 (밀리초)
+        current_position = self.mediaPlayer.get_time()
+        if current_position < 0:
+            current_position = 0
+            
+        new_position = current_position - 5000  # 5초(5000밀리초) 뒤로
+        
+        # 0보다 작으면 영상 처음으로 이동
+        if new_position < 0:
+            new_position = 0
+            
+        # 위치 설정
+        self.mediaPlayer.set_time(new_position)
+        
+        # 위치 설정 후 즉시 시간 표시 업데이트 (타이머 대기 없이)
+        try:
+            # 전체 길이
+            total_duration = self.mediaPlayer.get_length()
+            if total_duration <= 0:
+                total_duration = 0
+                
+            # 시간 문자열 포맷팅
+            position_sec = new_position // 1000
+            duration_sec = total_duration // 1000
+            
+            pos_h = position_sec // 3600
+            pos_m = (position_sec % 3600) // 60
+            pos_s = position_sec % 60
+            
+            dur_h = duration_sec // 3600
+            dur_m = (duration_sec % 3600) // 60
+            dur_s = duration_sec % 60
+            
+            time_str = f"{pos_h:02d}:{pos_m:02d}:{pos_s:02d} / {dur_h:02d}:{dur_m:02d}:{dur_s:02d}"
+            self.label_running_time.setText(time_str)
+            
+            # 슬라이더 값도 즉시 업데이트
+            self.horizontalSlider_running_time.setValue(new_position)
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 시간 즉시 업데이트 오류: {e}")
+        
+        if DEBUG:
+            print(f"{DEBUG_TAG['SEND']} 5초 뒤로 이동: {current_position}ms → {new_position}ms")
+    
+    def toggle_playback(self):
+        """재생/일시정지 토글 기능"""
+        if not hasattr(self, 'mediaPlayer'):
+            return
+            
+        if self.is_playing:
+            # 재생 중이면 일시정지
+            self.mediaPlayer.pause()
+            self.is_playing = False
+            self.pushButton_run.setText("▶")  # 재생 버튼으로 변경
+            self.label_media_status.setText("Paused")  # 일시정지 상태로 표시
+            
+            # 재생 아이콘 표시 - 현재 프레임 위에 오버레이
+            if hasattr(self, 'play_icon_label'):
+                self.play_icon_label.show()
+                
+            # 마커퀴 재생 아이콘도 표시 (vlc marquee 사용)
+            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 1)
+            self.mediaPlayer.video_set_marquee_string(vlc.VideoMarqueeOption.Text, "▶")
+            
+            # 일시정지 상태에서는 썸네일을 표시하지 않음 (현재 비디오 프레임 유지)
+            
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 미디어 일시 정지 (▶ 아이콘 표시)")
+        else:
+            # 정지 또는 일시정지 상태면 재생
+            if not self.mediaPlayer.get_media():
+                if DEBUG:
+                    print(f"{DEBUG_TAG['SEND']} 재생할 미디어가 없음")
+                return
+            
+            # 썸네일 이미지가 있다면 숨김
+            if hasattr(self, 'thumbnail_label') and self.thumbnail_label.isVisible():
+                self.thumbnail_label.hide()
+            
+            # 재생 아이콘 숨김
+            if hasattr(self, 'play_icon_label') and self.play_icon_label.isVisible():
+                self.play_icon_label.hide()
+                
+            # 재생 아이콘 마커퀴 제거
+            self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 0)
+            
+            # 비디오 재생 시작
+            self.mediaPlayer.play()
+            self.is_playing = True
+            self.pushButton_run.setText("❚❚")  # 일시정지 버튼으로 변경
+            
+            # 컨트롤 버튼 활성화
+            self.pushButton_stop.setEnabled(True)
+            self.pushButton_seek_forward.setEnabled(True)
+            self.pushButton_seek_backward.setEnabled(True)
+            
+            # 타이머 시작
+            if not hasattr(self, 'timer') or not self.timer.isActive():
+                self.timer = QTimer(self)
+                self.timer.setInterval(500)  # 0.5초 간격으로 업데이트
+                self.timer.timeout.connect(self.update_time_labels)
+                self.timer.start()
+                
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 미디어 재생 시작 (썸네일 숨김)")
+    
+    def update_time_labels(self):
+        """VLC 미디어 재생 시간 업데이트"""
+        if not hasattr(self, 'mediaPlayer'):
+            return
+            
+        try:
+            # 현재 위치(밀리초) - 재생 중이 아니어도 현재 위치 표시 (즉시 반영)
+            position = self.mediaPlayer.get_time()
+            if position < 0:
+                position = 0
+                
+            # 전체 길이(밀리초)
+            duration = self.mediaPlayer.get_length()
+            if duration <= 0:
+                duration = 0
+                
+            # 슬라이더 업데이트 (중복 이벤트 방지를 위해 값이 변경된 경우만)
+            current_slider_value = self.horizontalSlider_running_time.value()
+            if abs(current_slider_value - position) > 500:  # 0.5초 이상 차이가 날 때만 업데이트
+                self.horizontalSlider_running_time.setRange(0, duration)
+                self.horizontalSlider_running_time.setValue(position)
+            
+            # 시간 문자열 포맷팅
+            position_sec = position // 1000
+            duration_sec = duration // 1000
+            
+            pos_h = position_sec // 3600
+            pos_m = (position_sec % 3600) // 60
+            pos_s = position_sec % 60
+            
+            dur_h = duration_sec // 3600
+            dur_m = (duration_sec % 3600) // 60
+            dur_s = duration_sec % 60
+            
+            time_str = f"{pos_h:02d}:{pos_m:02d}:{pos_s:02d} / {dur_h:02d}:{dur_m:02d}:{dur_s:02d}"
+            self.label_running_time.setText(time_str)
+            
+            # 미디어 상태 표시 (영어로 표시)
+            if self.mediaPlayer.is_playing():
+                self.label_media_status.setText("Playing")
+                self.pushButton_run.setText("❚❚")  # 일시정지 버튼으로 표시
+                self.pushButton_stop.setEnabled(True)
+                self.pushButton_seek_forward.setEnabled(True)
+                self.pushButton_seek_backward.setEnabled(True)
+                
+                # 재생 중일 때는 재생 마커퀴 숨기기
+                self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 0)
+            else:
+                if position >= duration - 500 and duration > 0: # 거의 끝까지 재생됨
+                    self.label_media_status.setText("Finished")
+                    self.pushButton_run.setText("▶")  # 재생 버튼으로 표시
+                    self.is_playing = False
+                elif self.is_playing == False and position > 0:
+                    # 일시정지 상태 유지
+                    self.label_media_status.setText("Paused")
+                    
+                    # 재생이 종료되었을 때 썸네일과 재생 아이콘 표시
+                    if hasattr(self, 'thumbnail_label'):
+                        self.thumbnail_label.show()
+                        
+                    if hasattr(self, 'play_icon_label'):
+                        self.play_icon_label.show()
+                        
+                    # 마커퀴 재생 아이콘도 표시
+                    self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Enable, 1)
+                    self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Size, 60)
+                    self.mediaPlayer.video_set_marquee_string(vlc.VideoMarqueeOption.Text, "▶")
+                    self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Position, 8)
+                    self.mediaPlayer.video_set_marquee_int(vlc.VideoMarqueeOption.Opacity, 200)
+                    
+                    # 타이머는 계속 실행 (위치 정보 계속 업데이트)
+                    # self.timer.stop() - 주석 처리
+            
+        except Exception as e:
+            if DEBUG:
+                print(f"{DEBUG_TAG['ERR']} 시간 업데이트 오류: {e}")
+                print(traceback.format_exc())
+    
+    def eventFilter(self, obj, event):
+        """이벤트 필터 - 비디오 영역 클릭 처리"""
+        from PyQt5.QtCore import QEvent
+        
+        if obj == self.widget_case_detail_video and event.type() == QEvent.MouseButtonPress:
+            # 비디오 위젯 클릭 시 재생/일시정지 토글
+            if DEBUG:
+                print(f"{DEBUG_TAG['SEND']} 비디오 영역 클릭 - 재생/일시정지 토글")
+            
+            # 비디오가 준비되어 있을 때만 재생 토글 처리
+            if hasattr(self, 'mediaPlayer') and self.mediaPlayer.get_media():
+                self.toggle_playback()
+                return True  # 이벤트 처리됨
+                
+        return super().eventFilter(obj, event)  # 기본 이벤트 처리

@@ -59,6 +59,14 @@ class DetectionDialog(QDialog):
             print(f"탐지 다이얼로그 초기화 실패: {e}")
             print(traceback.format_exc())
     
+    def closeEvent(self, event):
+        """X 버튼을 눌러 다이얼로그를 닫을 경우 IGNORE로 처리"""
+        # 명시적으로 closeEvent가 호출되었을 때 (X 버튼 클릭 시)
+        # 아직 응답이 처리되지 않았다면 IGNORE로 처리
+        print("X 버튼으로 다이얼로그 종료 - IGNORE로 처리")
+        self.handle_response("IGNORE")
+        event.accept()  # 이벤트 수락 (창 닫기)
+    
     def get_dialog_title(self):
         """다이얼로그 제목 생성"""
         try:
