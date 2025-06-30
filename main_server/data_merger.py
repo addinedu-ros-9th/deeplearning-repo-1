@@ -344,7 +344,7 @@ class DataMerger(threading.Thread):
             del self.tracked_objects[tid]
 
     def _draw_detections_and_get_frame(self, jpeg_binary, detections):
-        """ JPEG 바이너리를 디코드하고 Bounding Box와 추적 ID를 그린 뒤, OpenCV 프레임 객체를 반환 """
+        """ JPEG 바이너리를 디코드하고 Bounding Box와 추적 ID 및 case type에 따라 색상을 입힌 뒤, OpenCV 프레임 객체를 반환 """
         try:
             np_arr = np.frombuffer(jpeg_binary, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -353,17 +353,24 @@ class DataMerger(threading.Thread):
             if detections:
                 for det in detections:
                     box = det.get('box')
+                    case_type = det.get('case', 'unknown')
                     if not box or len(box) != 4: continue
                     x1, y1, x2, y2 = map(int, box)
-                    
-                    # 추적 ID와 레이블 함께 표시
-                    track_id = det.get('track_id', -1)
+
+                    color = (0, 255, 0)  # 기본 초록색 (emergency)
+                    if case_type == 'danger':
+                        color = (0, 0, 255)  # 빨간색
+                    elif case_type == 'illegal':
+                        color = (255, 0, 0)  # 파란색
+
+                    # 추적 ID, 레이블 및 신뢰도 표시
                     label = det.get('label', 'unknown')
-                    text = f"ID:{track_id} {label}"
-                    
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2) # 추적 성공 시 초록색
+                    confidence = det.get('confidence', 0.0)
+                    text = f"{label}: {confidence:.2f}"
+
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                     cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            
+
             return frame
         except Exception as e:
             print(f"[{self.name}] 이미지 드로잉 오류: {e}")
