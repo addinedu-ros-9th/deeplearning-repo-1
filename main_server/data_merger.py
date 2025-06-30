@@ -135,61 +135,52 @@ class DataMerger(threading.Thread):
 
 
     def _merge_and_record_thread(self):
-        """
-        데이터를 병합하고, 상태에 따라 녹화를 수행하는 메인 처리 스레드.
-        [수정] 모든 상태에서 타임아웃을 짧게 유지하여 영상 멈춤 현상을 해결합니다.
-        """
-        while self.running:
-            # DBManager로부터 오는 녹화 종료 신호 확인
-            stop_signal = self.robot_status.get('recording_stop_signal')
-            if self.is_recording and stop_signal:
-                self._stop_recording(stop_signal)
-                self.robot_status['recording_stop_signal'] = None # 신호 처리 후 초기화
-
-            processed_ids = set()
-            with self.buffer_lock:
-                # 1. 병합 (AI 결과 + 이미지)
-                # AI 분석 결과가 있는 프레임을 우선적으로 처리합니다.
-                common_ids = self.image_buffer.keys() & self.event_buffer.keys()
-                for fid in common_ids:
-                    # 버퍼에 키가 없는 경우를 대비한 방어 코드
-                    if fid not in self.image_buffer or fid not in self.event_buffer: continue
-                    jpeg_binary, timestamp, _ = self.image_buffer[fid]
-                    event_data, _ = self.event_buffer[fid]
-                    
-                    self._process_merged_frame(fid, timestamp, jpeg_binary, event_data)
-                    processed_ids.add(fid)
-
-                # 2. 타임아웃된 이미지 단독 처리
-                # [핵심 수정!] patrolling 상태의 timeout 을 2초가 아닌 0.1초로 대폭 줄입니다.
-                # 이렇게 하면 모든 상태에서 AI 결과를 기다리지 않고 빠르게 영상이 전송됩니다.
-                timeout = timedelta(seconds= 0.3)
-                
-                now = datetime.now()
-                # 버퍼에 있는 모든 이미지를 순회하며 타임아웃이 지났는지 확인
-                old_image_ids = {fid for fid, (_, _, ts) in self.image_buffer.items() if now - ts > timeout}
-
-                for fid in old_image_ids:
-                    # 이미 병합 처리된 프레임은 건너뜁니다.
-                    if fid in processed_ids: continue
-                    # 버퍼에 키가 없는 경우를 대비한 방어 코드
-                    if fid not in self.image_buffer: continue
-                    
-                    jpeg_binary, timestamp, _ = self.image_buffer[fid]
-                    
-                    # 현재 상태를 다시 한번 확인하여 정확하게 전달
-                    current_state = self.robot_status.get('state', 'idle')
-                    self._process_unmerged_frame(fid, timestamp, jpeg_binary, current_state)
-                    processed_ids.add(fid)
-                
-                # 3. 버퍼 정리
-                # 처리된 프레임들을 버퍼에서 제거합니다.
-                for fid in processed_ids:
-                    self.image_buffer.pop(fid, None)
-                    self.event_buffer.pop(fid, None) # 병합되었을 수 있으므로 이벤트 버퍼에서도 제거
-
-            # CPU 사용량을 줄이기 위한 짧은 대기
-            time.sleep(0.03)
+            """
+            데이터를 병합하고, 상태에 따라 녹화를 수행하는 메인 처리 스레드.
+            [수정] 모든 상태에서 타임아웃을 짧게 유지하여 영상 멈춤 현상을 해결합니다.
+            """
+            while self.running:
+                # DBManager로부터 오는 녹화 종료 신호 확인
+                stop_signal = self.robot_status.get('recording_stop_signal')
+                if self.is_recording and stop_signal:
+                    self._stop_recording(stop_signal)
+                    self.robot_status['recording_stop_signal'] = None # 신호 처리 후 초기화
+                processed_ids = set()
+                with self.buffer_lock:
+                    # 1. 병합 (AI 결과 + 이미지)
+                    # AI 분석 결과가 있는 프레임을 우선적으로 처리합니다.
+                    common_ids = self.image_buffer.keys() & self.event_buffer.keys()
+                    for fid in common_ids:
+                        # 버퍼에 키가 없는 경우를 대비한 방어 코드
+                        if fid not in self.image_buffer or fid not in self.event_buffer: continue
+                        jpeg_binary, timestamp, _ = self.image_buffer[fid]
+                        event_data, _ = self.event_buffer[fid]
+                        self._process_merged_frame(fid, timestamp, jpeg_binary, event_data)
+                        processed_ids.add(fid)
+                    # 2. 타임아웃된 이미지 단독 처리
+                    # [핵심 수정!] patrolling 상태의 timeout 을 2초가 아닌 0.1초로 대폭 줄입니다.
+                    # 이렇게 하면 모든 상태에서 AI 결과를 기다리지 않고 빠르게 영상이 전송됩니다.
+                    timeout = timedelta(seconds= 0.3)
+                    now = datetime.now()
+                    # 버퍼에 있는 모든 이미지를 순회하며 타임아웃이 지났는지 확인
+                    old_image_ids = {fid for fid, (_, _, ts) in self.image_buffer.items() if now - ts > timeout}
+                    for fid in old_image_ids:
+                        # 이미 병합 처리된 프레임은 건너뜁니다.
+                        if fid in processed_ids: continue
+                        # 버퍼에 키가 없는 경우를 대비한 방어 코드
+                        if fid not in self.image_buffer: continue
+                        jpeg_binary, timestamp, _ = self.image_buffer[fid]
+                        # 현재 상태를 다시 한번 확인하여 정확하게 전달
+                        current_state = self.robot_status.get('state', 'idle')
+                        self._process_unmerged_frame(fid, timestamp, jpeg_binary, current_state)
+                        processed_ids.add(fid)
+                    # 3. 버퍼 정리
+                    # 처리된 프레임들을 버퍼에서 제거합니다.
+                    for fid in processed_ids:
+                        self.image_buffer.pop(fid, None)
+                        self.event_buffer.pop(fid, None) # 병합되었을 수 있으므로 이벤트 버퍼에서도 제거
+                # CPU 사용량을 줄이기 위한 짧은 대기
+                time.sleep(0.03)
 
     def _process_merged_frame(self, frame_id, timestamp, jpeg_binary, event_data):
         """AI 분석 결과와 병합된 프레임을 처리 (녹화 및 GUI 전송)"""

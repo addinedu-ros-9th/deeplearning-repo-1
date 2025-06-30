@@ -6,60 +6,176 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>728</width>
-    <height>504</height>
+    <width>1113</width>
+    <height>804</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MainWindow</string>
   </property>
+  <property name="styleSheet">
+   <string notr="true">/* 전체 배경 및 폰트 */
+QWidget {
+    background-color: #e9f6fe;
+    font-family: &quot;Segoe UI&quot;, &quot;맑은 고딕&quot;, sans-serif;
+    font-size: 14px;
+    color: #222;
+}
+
+/* 탭 스타일 */
+QTabWidget::pane {
+    border: none;
+    background-color: #e9f6fe;
+}
+
+QTabBar::tab {
+    background: #d4f4e6;  /* 비활성 탭: 연한 녹색 */
+    border: 1px solid #aad4f5;
+    border-bottom: none;
+    padding: 6px 20px;
+    min-width: 130px;
+    font-weight: bold;
+    color: #006666;
+    text-align: center;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+QTabBar::tab:selected {
+    background: #2196f3;  /* 활성 탭: 진한 파랑 */
+    color: white;
+}
+
+/* 그룹박스 스타일 */
+QGroupBox {
+    border: 1px solid #cce7f6;
+    border-radius: 5px;
+    font-weight: bold;
+    color: #005b99;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px;
+}
+
+/* 라벨 */
+QLabel {
+    font-size: 14px;
+    color: #222;
+}
+#robot_location, #robot_status, #detections {
+    font-weight: bold;
+    background-color: transparent;
+}
+#label_user_name {
+    font-weight: bold;
+    border: none;
+    font-size: 18px;
+}
+#live_feed_label, #map_display_label, #detection_image {
+    border: 1px solid #b3d9ff;
+    border-radius: 6px;
+}
+
+/* 로그 출력 박스 */
+#textEdit_log_box {
+    background-color: white;
+}
+
+/* 버튼 */
+QPushButton {
+    background-color: #4db8ff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #33aaff;
+}
+QPushButton:pressed {
+    background-color: #2196f3;
+}
+
+/* 콤보박스 */
+QComboBox {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 90px;
+}
+
+/* 날짜/시간 선택기 */
+QDateTimeEdit {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* 테이블 */
+QTableWidget {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    gridline-color: #aad4f5;
+}
+QHeaderView::section {
+    background-color: #d0eafc;
+    font-weight: bold;
+    padding: 6px;
+    border: 1px solid #aad4f5;
+}
+
+/* 슬라이더 */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #cce7f6;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #4db8ff;
+    width: 12px;
+    border-radius: 6px;
+}
+</string>
+  </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="styleSheet">
+    <string notr="true"/>
+   </property>
    <layout class="QVBoxLayout" name="verticalLayout_on_centralwidget">
     <item>
      <widget class="QTabWidget" name="tabWidget">
+      <property name="styleSheet">
+       <string notr="true"/>
+      </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="main_tab">
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
        <attribute name="title">
         <string>Main Monitoring</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_on_main_tab"/>
       </widget>
       <widget class="QWidget" name="case_logs_tab">
+       <property name="styleSheet">
+        <string notr="true"/>
+       </property>
        <attribute name="title">
         <string>Case Logs</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_on_manage_tab"/>
       </widget>
-      <widget class="QWidget" name="system_tab">
-       <attribute name="title">
-        <string>System Settings</string>
-       </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout_2"/>
-      </widget>
      </widget>
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>728</width>
-     <height>24</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menu">
-    <property name="title">
-     <string>File</string>
-    </property>
-    <addaction name="actionExit"/>
-   </widget>
-   <addaction name="menu"/>
-  </widget>
-  <widget class="QStatusBar" name="statusbar"/>
   <action name="actionExit">
    <property name="text">
     <string>Exit</string>

@@ -197,7 +197,6 @@ class MainWindow(QMainWindow):
         # 탐지 및 대응 추적용 변수들
         self.current_detection = None   # 현재 처리 중인 탐지 정보 
         self.current_detection_image = None  # 현재 처리 중인 탐지 이미지
-        self.detection_start_time = None  # 탐지 시작 시간
         self.popup_active = False  # 팝업창이 활성화 되어있는지
         self.status_frozen = False  # 상태 표시가 고정되었는지 여부
         self.frozen_status = {  # 고정된 상태 정보
@@ -398,9 +397,8 @@ class MainWindow(QMainWindow):
     def handle_detection(self, json_data: dict, image_data: bytes):
         """탐지 데이터 처리"""
         try:
-            # 이미지 데이터 수신 시간 기록 (datetime는 클래스)
-            from datetime import datetime as dt
-            current_time = dt.now(timezone.utc).isoformat()
+            # 이미지 데이터 수신 시간 기록 
+            current_time = datetime.now(KOREA_TIMEZONE).isoformat()  # 한국 시간으로 현재 시각 기록
             if DEBUG:
                 print(f"\n{DEBUG_TAG['DET']} 탐지 데이터 수신: {current_time}")
                 print(f"  [헤더 정보]")
@@ -505,6 +503,7 @@ class MainWindow(QMainWindow):
                     self.current_detection['location'] = location
                     
                     if DEBUG:
+                        print(f"{DEBUG_TAG['DET']} ❗ 탐지 시작")
                         print(f"{DEBUG_TAG['DET']} 탐지 정보에 위치 저장: {location}")
                         
                     self.current_detection_image = image_data
@@ -520,13 +519,16 @@ class MainWindow(QMainWindow):
                         for det in json_data.get('detections', [])
                     )
                     self.frozen_status["detections"] = detection_text
-                    
-                    # 탐지 시작 시간 저장 (한국 표준시, KST 사용)
-                    # 전역변수 KOREA_TIMEZONE 사용하여 한글로 시간 저장
-                    self.detection_start_time = datetime.now(KOREA_TIMEZONE).isoformat()
+
+                    # 탐지 시작 시간 설정 (한국 표준시, KST)
+                    if 'timestamp' in json_data:
+                        # 프레임에 타임스탬프 정보가 있으면 사용
+                        self.detection_start_time = json_data['timestamp']
+                    else:
+                        # 없으면 현재 시간으로 설정
+                        self.detection_start_time = datetime.now(KOREA_TIMEZONE).isoformat()
                     
                     if DEBUG:
-                        print(f"{DEBUG_TAG['DET']} 탐지 시작 시간: {self.detection_start_time}")
                         print(f"{DEBUG_TAG['DET']} 탐지 위치 (location): {self.current_detection.get('location', 'unknown')}")
                         print(f"{DEBUG_TAG['DET']} 새 팝업 생성")
                         print(f"{DEBUG_TAG['DET']} 상태 표시 고정됨")
@@ -628,6 +630,7 @@ class MainWindow(QMainWindow):
             # 무시는 case_closed=1로 설정하지 않음 (is_ignored만 1로 설정)
             
             if DEBUG:
+                print(f"{DEBUG_TAG['DET']} ================ IGNORE 처리 시작 ===============")
                 print(f"{DEBUG_TAG['DET']} 사용자가 탐지를 무시함 - DB에 로그 전송 시작")
                 print(f"{DEBUG_TAG['DET']} 현재 대응 상태: {self.response_actions}")
                 print(f"{DEBUG_TAG['DET']} IGNORE 처리: 케이스 종료(is_case_closed) 설정 안함, 무시(is_ignored)만 설정")
@@ -671,11 +674,22 @@ class MainWindow(QMainWindow):
             self.response_actions["is_emergency_warned"] = 1
         elif action_type == "CASE_CLOSED":
             # 사건 종료 시 DB에 로그 전송
+            if DEBUG:
+                print(f"{DEBUG_TAG['DET']} ================ 사건 종료 처리 시작 ===============")            
+
             self.response_actions["is_case_closed"] = 1
             self.send_log_to_db_manager()
             
             # 케이스 종료 시 이동 버튼 다시 활성화 (현재 위치에 맞게)
             self.monitoring_tab.enable_movement_buttons()
+            
+            # 순찰 재개 로직 추가: BASE가 아닌 경우에만 순찰 재개
+            if self.frozen_status.get("robot_location") != "BASE":
+                # 사건 위치가 BASE가 아닌 경우에만 순찰 재개 (약간의 지연을 두고)
+                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation)
+                if DEBUG:
+                    print(f"{DEBUG_TAG['DET']} 사건 종료: 순찰 애니메이션 재개 예약됨 ({self.frozen_status.get('robot_location')} 위치에서)")
+            
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 사건 종료: 로봇 이동 버튼 재활성화")
             
@@ -711,15 +725,22 @@ class MainWindow(QMainWindow):
         """DB 매니저에게 로그 전송"""
         try:
             # 현재 시간을 종료 시간으로 설정 (한국 표준시, KST)
-            # 전역변수 KOREA_TIMEZONE 사용
-            end_time = datetime.now(KOREA_TIMEZONE).isoformat()  # 한국 시간으로 현재 시각 기록
+            end_time_full = datetime.now(KOREA_TIMEZONE).isoformat()
             
-            if not self.current_detection or not self.detection_start_time:
+            # 타임존 정보 제거 -> MySQL용 DATETIME 형식으로 변환 ('YYYY-MM-DD HH:MM:SS')
+            end_time_dt = datetime.fromisoformat(end_time_full)
+            end_time = end_time_dt.strftime('%Y-%m-%d %H:%M:%S')
+            
+            if not self.current_detection:
                 if DEBUG:
                     print(f"{DEBUG_TAG['ERR']} 로그 전송 실패: 탐지 정보 없음")
                 return
+            
+            # 시작 시간도 같은 방식으로 처리 (타임존 정보 제거)
+            start_time_dt = datetime.fromisoformat(self.detection_start_time)
+            start_time = start_time_dt.strftime('%Y-%m-%d %H:%M:%S')
                 
-            # 로그 데이터 구성 (한국어 주석: 한국시간으로 모든 시간정보 기록)
+            # 로그 데이터 구성 (타임존 정보가 제거된 시간 형식 사용)
             log_data = {
                 "logs": [
                     {
@@ -738,9 +759,9 @@ class MainWindow(QMainWindow):
                         "is_danger_warned": self.response_actions["is_danger_warned"],
                         "is_emergency_warned": self.response_actions["is_emergency_warned"],
                         "is_case_closed": self.response_actions["is_case_closed"],
-                        # 한국 시간대(KST)로 기록된 시간 정보
-                        "start_time": self.detection_start_time,  # 탐지 시작 시간 (한국 시간)
-                        "end_time": end_time  # 사건 종료 시간 (한국 시간)
+                        # 타임존 정보가 제거된 시간 정보 (MySQL DATETIME 형식)
+                        "start_time": start_time,  # 탐지 시작 시간 (타임존 정보 없음)
+                        "end_time": end_time  # 사건 종료 시간 (타임존 정보 없음)
                     }
                 ]
             }
@@ -759,16 +780,11 @@ class MainWindow(QMainWindow):
                 print(f"{DEBUG_TAG['SEND']} DB 매니저에 로그 전송:")
                 print(f"  - 헤더 크기: {int.from_bytes(header, 'big')} 바이트")
                 print(f"  - 로그 내용: {log_data}")
-                print(f"  - 위치 정보(frozen_status): {self.frozen_status.get('robot_location')}")
-                print(f"  - 위치 정보(current_detection): {self.current_detection.get('location')}")
-                print(f"  - 최종 사용된 location: {log_data['logs'][0]['location']}")
-                print(f"  - 사용자 이름(robot_id): {log_data['logs'][0]['robot_id']}")
-                print(f"  - 한국 시간 정보:")
-                print(f"    - 탐지 시작: {log_data['logs'][0]['start_time']}")
-                print(f"    - 사건 종료: {log_data['logs'][0]['end_time']}")
-                print(f"  - 사용자 이름(robot_id): {log_data['logs'][0]['robot_id']}")
-                print(f"  - 시작 시간(한국): {log_data['logs'][0]['start_time']}")
-                print(f"  - 종료 시간(한국): {log_data['logs'][0]['end_time']}")
+                print(f"  - 시간 형식 변환됨: KST 타임존 정보 제거")
+                print(f"    - 원본 시작 시간: {self.detection_start_time}")
+                print(f"    - 변환된 시작 시간: {start_time}")
+                print(f"    - 원본 종료 시간: {end_time_full}")
+                print(f"    - 변환된 종료 시간: {end_time}")
                 
             # DB 매니저에 소켓 연결 및 데이터 전송
             db_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -923,6 +939,8 @@ class MainWindow(QMainWindow):
                     print(f"{DEBUG_TAG['INIT']} Case Logs 탭 활성화, 로그 데이터 요청 (frozen_status 영향 없음)")
                 logs = self.fetch_logs()
                 self.case_logs_tab.update_logs(logs)  # 로그 업데이트 메소드 호출
+                # 로그 업데이트 후 필터 초기화 (탭 진입 시마다 필터 초기화)
+                self.case_logs_tab.reset_filter()
             elif index != 0:
                 # 모니터링 탭이 아닌 다른 탭으로 이동(설정 탭 등)
                 # 상태 표시 고정 (단, 사건이 진행 중인 경우만 - popup_active가 True인 경우)
