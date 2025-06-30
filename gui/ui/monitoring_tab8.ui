@@ -277,10 +277,10 @@ QSlider::handle:horizontal {
     <widget class="QLabel" name="detections">
      <property name="geometry">
       <rect>
-       <x>20</x>
-       <y>280</y>
-       <width>141</width>
-       <height>51</height>
+       <x>10</x>
+       <y>200</y>
+       <width>181</width>
+       <height>131</height>
       </rect>
      </property>
      <property name="font">
@@ -307,7 +307,7 @@ QSlider::handle:horizontal {
     <widget class="QLabel" name="robot_location">
      <property name="geometry">
       <rect>
-       <x>160</x>
+       <x>190</x>
        <y>280</y>
        <width>131</width>
        <height>51</height>
@@ -337,9 +337,9 @@ QSlider::handle:horizontal {
     <widget class="QLabel" name="robot_status">
      <property name="geometry">
       <rect>
-       <x>290</x>
+       <x>320</x>
        <y>280</y>
-       <width>131</width>
+       <width>111</width>
        <height>51</height>
       </rect>
      </property>

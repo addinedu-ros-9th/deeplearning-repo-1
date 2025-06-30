@@ -9,12 +9,50 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import (
     Qt, QPropertyAnimation, QPoint,
-    QEasingCurve, QTimer, pyqtSignal, QSize, QVariantAnimation
+    QEasingCurve, QTimer, pyqtSignal, QSize, QVariantAnimation,
+    QRunnable, QThreadPool, QObject, pyqtSlot
 )
 from PyQt5.QtGui import QPixmap, QColor, QIcon, QTransform, QIcon
 from PyQt5.uic import loadUi
 from datetime import datetime, timezone, timedelta
 import math
+
+# 이미지 처리를 위한 스레드 워커 시그널 클래스
+class ImageProcessWorkerSignals(QObject):
+    """이미지 처리 워커에서 사용할 시그널"""
+    processed = pyqtSignal(QPixmap)
+    error = pyqtSignal(str)
+
+# 이미지 처리를 위한 스레드 워커 클래스
+class ImageProcessWorker(QRunnable):
+    """이미지 처리를 백그라운드 스레드에서 수행하는 워커 클래스"""    
+    
+    def __init__(self, image_data, target_width, target_height):
+        super().__init__()
+        self.image_data = image_data
+        self.target_width = target_width
+        self.target_height = target_height
+        self.signals = ImageProcessWorkerSignals()
+        
+    @pyqtSlot()
+    def run(self):
+        """이미지 처리 실행 (백그라운드 스레드)"""
+        try:
+            pixmap = QPixmap()
+            if pixmap.loadFromData(self.image_data):
+                # 이미지 크기 조정
+                scaled_pixmap = pixmap.scaled(
+                    self.target_width, 
+                    self.target_height,
+                    Qt.KeepAspectRatio, 
+                    Qt.SmoothTransformation
+                )
+                # 처리된 이미지를 시그널로 전송
+                self.signals.processed.emit(scaled_pixmap)
+            else:
+                self.signals.error.emit("이미지 데이터 로드 실패")
+        except Exception as e:
+            self.signals.error.emit(str(e))
 
 # 한국 시간대(타임존) 설정
 # 한국 표준시(KST)는 UTC+9 입니다
@@ -68,6 +106,10 @@ class MonitoringTab(QWidget):
         self.feedback_timer.timeout.connect(self.clear_feedback_message)
         self.original_detections_text = ""          # 원래 탐지 라벨 텍스트 저장용
         self.command_buttons_state = None           # 현재 활성화된 명령 버튼 상태
+        
+        # 스레드 풀 초기화 (이미지 처리용)
+        self.thread_pool = QThreadPool()
+        self.thread_pool.setMaxThreadCount(4)      # 최대 스레드 수 제한
         
         # 순찰 애니메이션 관련 변수
         self.patrol_timer = QTimer(self)            # 순찰 애니메이션용 타이머
@@ -862,7 +904,6 @@ class MonitoringTab(QWidget):
         self.streaming이 True일 때만 화면에 표시합니다.
         """
         try:
-            
             # 영상 데이터 유효성 검사 (항상 수행)
             if not image_data:
                 if DEBUG:
@@ -879,23 +920,17 @@ class MonitoringTab(QWidget):
                 # 화면을 업데이트하지 않고 데이터만 처리 (백그라운드 수신)
                 return
 
-            # 바이트 데이터로부터 QPixmap 생성
-            pixmap = QPixmap()
-            if not pixmap.loadFromData(image_data):
-                if DEBUG:
-                    print("이미지 데이터를 QPixmap으로 변환하지 못했습니다.")
-                return
-
-            # 이미지 크기를 라벨 크기에 맞게 조정
-            scaled_pixmap = pixmap.scaled(
-                self.live_feed_label.size(),
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
+            # 이미지 처리를 별도 스레드에서 수행
+            worker = ImageProcessWorker(
+                image_data, 
+                self.live_feed_label.width(), 
+                self.live_feed_label.height()
             )
+            worker.signals.processed.connect(self.update_camera_feed_pixmap)
+            worker.signals.error.connect(self.handle_camera_feed_error)
             
-            # 이미지 표시
-            self.live_feed_label.setPixmap(scaled_pixmap)
-            self.live_feed_label.setAlignment(Qt.AlignCenter)
+            # 워커를 스레드 풀에서 실행
+            self.thread_pool.start(worker)
             
             # 이미지 수신 시간 기록 (한국 표준시, KST - MySQL DATETIME 형식)
             current_time_dt = datetime.now(KOREA_TIMEZONE)
@@ -1513,9 +1548,14 @@ class MonitoringTab(QWidget):
                 # 버튼 활성화
                 self.enable_movement_buttons()
                 
-                # 도착 애니메이션 시작 (BASE가 아닌 경우만)
+                # 도착 후 처리 - BASE 위치와 아닌 경우 구분
                 if saved_target != 'BASE':
-                    self.start_arrival_animation()
+                    # 현재 상태가 patrolling이라면 순찰 모드로 들어감
+                    if self.current_status == 'patrolling':
+                        self.start_arrival_animation()  # 도착 애니메이션 후 순찰 시작
+                    else:
+                        # patrolling 상태가 아니면 일반 도착 애니메이션만 실행
+                        self.start_arrival_animation()
                 else:
                     # BASE 위치에서는 즉시 상태 업데이트
                     self.update_robot_status('idle')
@@ -1805,4 +1845,21 @@ class MonitoringTab(QWidget):
             
             if DEBUG:
                 print(f"{self.current_location} 구역 순찰 시작 위치로 설정: ({target_x}, {target_y}), 각도: {self.patrol_angle}도")
+    
+    def update_camera_feed_pixmap(self, pixmap):
+        """스레드에서 처리된 이미지를 UI에 표시"""
+        try:
+            self.live_feed_label.setPixmap(pixmap)
+            self.live_feed_label.setAlignment(Qt.AlignCenter)
+        except Exception as e:
+            if DEBUG:
+                print(f"카메라 피드 업데이트 중 오류 발생: {e}")
+    
+    def handle_camera_feed_error(self, error_msg):
+        """이미지 처리 중 오류 발생 시 처리"""
+        if DEBUG:
+            print(f"이미지 처리 오류: {error_msg}")
+            
+        # 오류 메시지를 표시하거나 기본 이미지로 대체할 수 있음
+        # 여기서는 간단히 로그만 출력
 

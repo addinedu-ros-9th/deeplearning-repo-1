@@ -13,25 +13,144 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <widget class="QLabel" name="image_label">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>20</y>
-     <width>381</width>
-     <height>391</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>image_label</string>
-   </property>
-  </widget>
+  <property name="styleSheet">
+   <string notr="true">/* 전체 배경 및 폰트 */
+QWidget {
+    background-color: #e9f6fe;
+    font-family: &quot;Segoe UI&quot;, &quot;맑은 고딕&quot;, sans-serif;
+    font-size: 14px;
+    color: #222;
+}
+
+/* 탭 스타일 */
+QTabWidget::pane {
+    border: none;
+    background-color: #e9f6fe;
+}
+
+QTabBar::tab {
+    background: #d4f4e6;  /* 비활성 탭: 연한 녹색 */
+    border: 1px solid #aad4f5;
+    border-bottom: none;
+    padding: 6px 20px;
+    min-width: 130px;
+    font-weight: bold;
+    color: #006666;
+    text-align: center;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+QTabBar::tab:selected {
+    background: #2196f3;  /* 활성 탭: 진한 파랑 */
+    color: white;
+}
+
+/* 그룹박스 스타일 */
+QGroupBox {
+    border: 1px solid #cce7f6;
+    border-radius: 5px;
+    font-weight: bold;
+    color: #005b99;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px;
+}
+
+/* 라벨 */
+QLabel {
+    font-size: 14px;
+    color: #222;
+}
+#robot_location, #robot_status, #detections {
+    font-weight: bold;
+    background-color: transparent;
+}
+#label_user_name {
+    font-weight: bold;
+    border: none;
+    font-size: 18px;
+}
+#live_feed_label, #map_display_label, #detection_image {
+    border: 1px solid #b3d9ff;
+    border-radius: 6px;
+}
+
+/* 로그 출력 박스 */
+#textEdit_log_box {
+    background-color: white;
+}
+
+/* 버튼 */
+QPushButton {
+    background-color: #4db8ff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #33aaff;
+}
+QPushButton:pressed {
+    background-color: #2196f3;
+}
+QPushButton:disabled {
+    background-color: #d0eafc;  /* 연한 하늘색 (비활성화 배경) */
+    color: #9bbcd1;             /* 흐릿한 회청색 텍스트 */
+}
+
+/* 콤보박스 */
+QComboBox {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 90px;
+}
+
+/* 날짜/시간 선택기 */
+QDateTimeEdit {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* 테이블 */
+QTableWidget {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    gridline-color: #aad4f5;
+}
+QHeaderView::section {
+    background-color: #d0eafc;
+    font-weight: bold;
+    padding: 6px;
+    border: 1px solid #aad4f5;
+}
+
+/* 슬라이더 */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #cce7f6;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #4db8ff;
+    width: 12px;
+    border-radius: 6px;
+}
+</string>
+  </property>
   <widget class="QGroupBox" name="info_box">
    <property name="geometry">
     <rect>
-     <x>430</x>
+     <x>400</x>
      <y>10</y>
-     <width>191</width>
+     <width>221</width>
      <height>409</height>
     </rect>
    </property>
@@ -59,7 +178,7 @@
      <rect>
       <x>20</x>
       <y>370</y>
-      <width>71</width>
+      <width>81</width>
       <height>27</height>
      </rect>
     </property>
@@ -70,9 +189,9 @@
    <widget class="QPushButton" name="btn_proceed">
     <property name="geometry">
      <rect>
-      <x>110</x>
+      <x>120</x>
       <y>370</y>
-      <width>71</width>
+      <width>81</width>
       <height>27</height>
      </rect>
     </property>
@@ -94,6 +213,32 @@
     </property>
     <property name="wordWrap">
      <bool>true</bool>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QGroupBox" name="groupBox">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>381</width>
+     <height>411</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Event Image</string>
+   </property>
+   <widget class="QLabel" name="image_label">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>30</y>
+      <width>341</width>
+      <height>371</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Event Image</string>
     </property>
    </widget>
   </widget>

@@ -682,6 +682,14 @@ class MainWindow(QMainWindow):
             
             # 케이스 종료 시 이동 버튼 다시 활성화 (현재 위치에 맞게)
             self.monitoring_tab.enable_movement_buttons()
+            
+            # 순찰 재개 로직 추가: BASE가 아닌 경우에만 순찰 재개
+            if self.frozen_status.get("robot_location") != "BASE":
+                # 사건 위치가 BASE가 아닌 경우에만 순찰 재개 (약간의 지연을 두고)
+                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation)
+                if DEBUG:
+                    print(f"{DEBUG_TAG['DET']} 사건 종료: 순찰 애니메이션 재개 예약됨 ({self.frozen_status.get('robot_location')} 위치에서)")
+            
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 사건 종료: 로봇 이동 버튼 재활성화")
             
