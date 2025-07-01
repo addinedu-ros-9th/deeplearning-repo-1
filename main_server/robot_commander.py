@@ -12,7 +12,7 @@ from shared.protocols import (
 ARUCO_ID_A = 10
 ARUCO_ID_B = 20
 ARUCO_ID_BASE = 30
-ARRIVAL_DISTANCE = 0.2
+ARRIVAL_DISTANCE = 0.5
 
 class RobotCommander(threading.Thread):
     def __init__(self, gui_listen_port, robot_controller_addr, robot_status, aruco_result_queue):
