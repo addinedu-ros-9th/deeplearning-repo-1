@@ -1,27 +1,47 @@
 # gui/src/login_window.py
+"""
+로그인 윈도우 모듈
+- 사용자 인증 처리
+- 서버 연결 및 인증 요청 전송
+- 인증 성공 시 메인 윈도우 실행
+"""
 
+# 표준 라이브러리 임포트
 import json
 import socket
-import traceback  # Add traceback module
+import traceback
+
+# PyQt5 관련 임포트
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.uic import loadUi
+
+# 애플리케이션 모듈 임포트
 from gui.src.main_window import MainWindow
 
-# 디버그 모드: True이면 터미널에 로그를 출력합니다
-DEBUG = True
+# 디버그 설정
+DEBUG = True  # True: 디버그 로그 출력, False: 로그 출력 안함
 
-# 서버 연결 설정
-SERVER_IP = "127.0.0.1"    # local host
-SERVER_PORT = 9005
+# 네트워크 설정
+SERVER_IP = "127.0.0.1"  # 서버 IP (localhost)
+SERVER_PORT = 9005       # 서버 포트
 
 class LoginWindow(QMainWindow):
+    """
+    로그인 윈도우 클래스
+    
+    주요 기능:
+    - 사용자 인증 화면 표시
+    - 서버 연결 및 인증 요청 전송
+    - 로그인 성공 시 메인 윈도우 실행
+    """
+    
     # 디버그 태그 정의
     DEBUG_TAG = {
-        'INIT': '[초기화]',
-        'CONN': '[연결]',
-        'AUTH': '[인증]',
-        'ERR': '[오류]'
+        'INIT': '[초기화]',  # 초기화 관련 로그
+        'CONN': '[연결]',    # 네트워크 연결 로그
+        'AUTH': '[인증]',    # 인증 처리 로그
+        'ERR': '[오류]'      # 오류 로그
     }
 
     def __init__(self):

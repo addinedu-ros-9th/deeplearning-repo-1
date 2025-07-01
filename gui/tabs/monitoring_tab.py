@@ -1,7 +1,18 @@
 # gui/tabs/monitoring_tab.py
+"""
+로봇 모니터링 탭 모듈
+- 로봇의 현재 상태, 위치, 카메라 피드 표시
+- 로봇 이동 및 순찰 애니메이션 처리
+- 명령 및 응답 UI 관리
+"""
 
+# 표준 라이브러리 임포트
 import os
-import datetime
+import math
+import time
+from datetime import datetime, timezone, timedelta
+
+# PyQt5 관련 임포트
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -12,23 +23,37 @@ from PyQt5.QtCore import (
     QEasingCurve, QTimer, pyqtSignal, QSize, QVariantAnimation,
     QRunnable, QThreadPool, QObject, pyqtSlot
 )
-from PyQt5.QtGui import QPixmap, QColor, QIcon, QTransform, QIcon
+from PyQt5.QtGui import QPixmap, QColor, QIcon, QTransform
 from PyQt5.uic import loadUi
-from datetime import datetime, timezone, timedelta
-import math
-import time
 
-# 이미지 처리를 위한 스레드 워커 시그널 클래스
 class ImageProcessWorkerSignals(QObject):
-    """이미지 처리 워커에서 사용할 시그널"""
+    """
+    이미지 처리 워커에서 사용할 시그널
+    
+    Signals:
+        processed (QPixmap): 처리된 이미지 반환 시그널
+        error (str): 오류 발생 시 메시지 반환 시그널
+    """
     processed = pyqtSignal(QPixmap)
     error = pyqtSignal(str)
 
-# 이미지 처리를 위한 스레드 워커 클래스
+
 class ImageProcessWorker(QRunnable):
-    """이미지 처리를 백그라운드 스레드에서 수행하는 워커 클래스"""    
+    """
+    이미지 처리를 백그라운드 스레드에서 수행하는 워커 클래스
+    
+    이미지 데이터를 비동기적으로 QPixmap으로 변환하고 크기를 조정
+    """    
     
     def __init__(self, image_data, target_width, target_height):
+        """
+        워커 초기화
+        
+        Args:
+            image_data (bytes): 이미지 바이너리 데이터
+            target_width (int): 조정할 가로 크기
+            target_height (int): 조정할 세로 크기
+        """
         super().__init__()
         self.image_data = image_data
         self.target_width = target_width
@@ -37,7 +62,7 @@ class ImageProcessWorker(QRunnable):
         
     @pyqtSlot()
     def run(self):
-        """이미지 처리 실행 (백그라운드 스레드)"""
+        """이미지 처리 실행 (백그라운드 스레드에서 동작)"""
         try:
             pixmap = QPixmap()
             if pixmap.loadFromData(self.image_data):
@@ -55,30 +80,39 @@ class ImageProcessWorker(QRunnable):
         except Exception as e:
             self.signals.error.emit(str(e))
 
-# 한국 시간대(타임존) 설정
-# 한국 표준시(KST)는 UTC+9 입니다
+# 시간대 설정
 KOREA_TIMEZONE = timezone(timedelta(hours=9))  # UTC+9 (한국 표준시, KST)
 
+# 디버그 설정
+DEBUG = True  # True: 디버그 로그 출력, False: 로그 출력 안함
 
-# 디버그 모드 설정
-DEBUG = True
-
-# UI 파일 경로
+# 리소스 파일 경로
 MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab8.ui')
 MONITORING_TAP_MAP_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'neighbot_new_map.png')
 
-# 깜빡임 효과 처리를 위한 워커 클래스
 class BlinkWorkerSignals(QObject):
-    """깜빡임 워커에서 사용할 시그널"""
+    """
+    깜빡임 효과를 위한 시그널 클래스
+    
+    Signals:
+        toggle_visibility: 가시성 토글 시그널 (매개변수 없음)
+    """
     toggle_visibility = pyqtSignal()
 
+
 class BlinkWorker(QRunnable):
-    """깜빡임 효과를 별도 스레드에서 처리하는 워커 클래스"""    
+    """
+    깜빡임 효과를 별도 스레드에서 처리하는 워커 클래스
+    
+    메인 UI 스레드를 차단하지 않고 일정 간격으로 토글 시그널을 발생시킴
+    """    
     
     def __init__(self, interval=1000):
         """
+        워커 초기화
+        
         Args:
-            interval (int): 깜빡임 간격 (ms)
+            interval (int): 깜빡임 간격 (밀리초)
         """
         super().__init__()
         self.interval = interval
@@ -87,7 +121,7 @@ class BlinkWorker(QRunnable):
     
     @pyqtSlot()
     def run(self):
-        """워커 실행 - 별도 스레드에서 실행됨"""
+        """워커 실행 함수 (별도 스레드에서 동작)"""
         while self._running:
             # 시그널 발생 (UI 스레드에서 처리될 것임)
             self.signals.toggle_visibility.emit()
@@ -99,12 +133,20 @@ class BlinkWorker(QRunnable):
         """워커 정지"""
         self._running = False
 
-# MonitoringTab: Main Monitoring 탭의 UI 로드만 담당
 class MonitoringTab(QWidget):
+    """
+    모니터링 탭 클래스
+    
+    로봇 위치, 상태 모니터링 및 제어를 위한 메인 UI 탭
+    - 맵 시각화 및 로봇 이동 애니메이션
+    - 로봇 상태 및 영상 피드 표시
+    - 명령 버튼 및 피드백 메시지 처리
+    """
+    
     # 시그널 정의
-    robot_command = pyqtSignal(str)      # 로봇 명령 시그널
-    stream_command = pyqtSignal(bool)    # 스트리밍 제어 시그널
-    connection_error = pyqtSignal(str)   # 연결 에러 시그널
+    robot_command = pyqtSignal(str)      # 로봇에 명령을 전송하는 시그널
+    stream_command = pyqtSignal(bool)    # 영상 스트림 시작/중지 시그널
+    connection_error = pyqtSignal(str)   # 연결 오류 메시지 시그널
     
     # 지역 좌표 정의 (맵 상의 픽셀 좌표)
     LOCATIONS = {
@@ -127,21 +169,34 @@ class MonitoringTab(QWidget):
     }
     
     def __init__(self, parent=None, user_name=None):
-        super().__init__(parent)
-        self.current_location = 'BASE'              # 현재 위치
-        self.target_location = None                 # 목표 위치
-        self.current_status = 'idle'                # 현재 상태
-        self.is_moving = False                      # 이동 중 여부
-        self.waiting_server_confirm = False         # 서버 확인 대기 중 여부
-        self.user_name = user_name or "unknown"     # 사용자 이름 (기본값 설정)
-        self.streaming = False                      # 스트리밍 표시 여부 (화면에 보여주는지)
-        self.feedback_timer = QTimer()              # 피드백 메시지용 타이머
-        self.feedback_timer.timeout.connect(self.clear_feedback_message)
-        self.original_detections_text = ""          # 원래 탐지 라벨 텍스트 저장용
-        self.command_buttons_state = None           # 현재 활성화된 명령 버튼 상태
+        """
+        모니터링 탭 초기화
         
-        # 스레드 풀 초기화 (이미지 처리용)
-        self.thread_pool = QThreadPool()
+        Args:
+            parent (QWidget, optional): 부모 위젯
+            user_name (str, optional): 사용자 이름
+        """
+        super().__init__(parent)
+        
+        # 로봇 상태 관련 변수
+        self.current_location = 'BASE'      # 현재 로봇 위치 ('BASE', 'A', 'B')
+        self.target_location = None         # 목표 이동 위치
+        self.current_status = 'idle'        # 현재 상태 ('idle', 'moving', 'patrolling')
+        self.is_moving = False              # 이동 중 여부
+        
+        # 서버/사용자 관련 변수
+        self.waiting_server_confirm = False  # 서버 응답 대기 중 여부
+        self.user_name = user_name or "unknown"  # 사용자 이름
+        
+        # UI 상태 관련 변수
+        self.streaming = False              # 스트리밍 표시 여부
+        self.feedback_timer = QTimer()      # 피드백 메시지 타이머
+        self.feedback_timer.timeout.connect(self.clear_feedback_message)
+        self.original_detections_text = ""  # 탐지 텍스트 저장용
+        self.command_buttons_state = None   # 명령 버튼 상태
+        
+        # 비동기 처리를 위한 스레드 풀
+        self.thread_pool = QThreadPool()    # 이미지 처리용
         self.thread_pool.setMaxThreadCount(4)      # 최대 스레드 수 제한
         
         # 순찰 애니메이션 관련 변수
