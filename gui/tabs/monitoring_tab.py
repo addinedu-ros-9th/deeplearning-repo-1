@@ -16,6 +16,7 @@ from PyQt5.QtGui import QPixmap, QColor, QIcon, QTransform, QIcon
 from PyQt5.uic import loadUi
 from datetime import datetime, timezone, timedelta
 import math
+import time
 
 # 이미지 처리를 위한 스레드 워커 시그널 클래스
 class ImageProcessWorkerSignals(QObject):
@@ -65,6 +66,38 @@ DEBUG = True
 # UI 파일 경로
 MONITORING_TAP_UI_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'monitoring_tab8.ui')
 MONITORING_TAP_MAP_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ui', 'neighbot_new_map.png')
+
+# 깜빡임 효과 처리를 위한 워커 클래스
+class BlinkWorkerSignals(QObject):
+    """깜빡임 워커에서 사용할 시그널"""
+    toggle_visibility = pyqtSignal()
+
+class BlinkWorker(QRunnable):
+    """깜빡임 효과를 별도 스레드에서 처리하는 워커 클래스"""    
+    
+    def __init__(self, interval=1000):
+        """
+        Args:
+            interval (int): 깜빡임 간격 (ms)
+        """
+        super().__init__()
+        self.interval = interval
+        self.signals = BlinkWorkerSignals()
+        self._running = True
+    
+    @pyqtSlot()
+    def run(self):
+        """워커 실행 - 별도 스레드에서 실행됨"""
+        while self._running:
+            # 시그널 발생 (UI 스레드에서 처리될 것임)
+            self.signals.toggle_visibility.emit()
+            
+            # 지정된 간격만큼 대기
+            time.sleep(self.interval / 1000)
+    
+    def stop(self):
+        """워커 정지"""
+        self._running = False
 
 # MonitoringTab: Main Monitoring 탭의 UI 로드만 담당
 class MonitoringTab(QWidget):
@@ -449,7 +482,17 @@ class MonitoringTab(QWidget):
         try:
             # 로봇 이미지 라벨 생성
             self.robot_label = QLabel(self)
-            robot_pixmap = QPixmap('./gui/ui/neighbot_2.png')  # 이미지 변경
+            
+            # 로봇 상태별 이미지 경로 저장 (이후 상태 변경 시 사용)
+            self.robot_icons = {
+                'idle': './gui/ui/neighbot_idle_gray.png',
+                'moving': './gui/ui/neighbot_moving_black.png',
+                'patrolling': './gui/ui/neighbot_patrolling_blue.png',
+                'detected': './gui/ui/neighbot_detected_red.png'
+            }
+            
+            # 기본 이미지 로드 (idle 상태)
+            robot_pixmap = QPixmap(self.robot_icons['idle'])
             scaled_robot = robot_pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             self.robot_label.setPixmap(scaled_robot)
             self.robot_label.setParent(self.map_display_label)
@@ -466,6 +509,15 @@ class MonitoringTab(QWidget):
             
             # 경로 표시 라벨 초기화
             self.path_line = None
+            
+            # 깜빡임 상태 초기화
+            self.robot_visible = True
+            self.blink_timer = QTimer(self)
+            self.blink_timer.setInterval(1000)  # 1초 간격으로 깜빡임
+            self.blink_timer.timeout.connect(self.toggle_robot_visibility)
+            
+            # 초기 상태 설정
+            self.update_robot_icon('idle')
             
             if DEBUG:
                 print("로봇 초기화 완료")
@@ -821,6 +873,13 @@ class MonitoringTab(QWidget):
                 self.enable_movement_buttons()
                 if DEBUG:
                     print(f"로봇 {status}: 이동 버튼 활성화 (현재 위치: {self.current_location})")
+            elif status == 'detected':
+                # 탐지 상태일 때 로그 추가
+                if DEBUG:
+                    print(f"로봇 {status}: 위험 상황 감지됨")
+            
+            # 로봇 아이콘 이미지 업데이트
+            self.update_robot_icon(status)
 
     def send_move_to_a_command(self):
         """A 지역으로 이동 명령을 전송"""
@@ -1353,9 +1412,9 @@ class MonitoringTab(QWidget):
         
         # 명령에 따른 로그 메시지 생성
         message = {
-            "DANGER_WARNING": "위험 경고를 발령했습니다.",
-            "EMERGENCY_WARNING": "응급 상황 경고를 발령했습니다.",
-            "ILLEGAL_WARNING": "위법 행위 경고를 발령했습니다.",
+            "DANGER_WARNING": "위험 알림을 발령했습니다.",
+            "EMERGENCY_WARNING": "응급 상황 알림을 발령했습니다.",
+            "ILLEGAL_WARNING": "위법 행위 알림을 발령했습니다.",
             "FIRE_REPORT": "119(소방서)에 신고를 접수했습니다.",
             "POLICE_REPORT": "112(경찰서)에 신고를 접수했습니다.",
             "CASE_CLOSED": "사건 종료 처리되었습니다."
@@ -1385,9 +1444,9 @@ class MonitoringTab(QWidget):
             msg_map = {
                 "FIRE_REPORT": "119 신고가 접수되었습니다.",
                 "POLICE_REPORT": "112 신고가 접수되었습니다.",
-                "ILLEGAL_WARNING": "위법 행위 경고가 전송되었습니다.",
-                "DANGER_WARNING": "위험 상황 경고가 전송되었습니다.",
-                "EMERGENCY_WARNING": "응급 상황 경고가 전송되었습니다.",
+                "ILLEGAL_WARNING": "위법 행위 알림이 전송되었습니다.",
+                "DANGER_WARNING": "위험 상황 알림이 전송되었습니다.",
+                "EMERGENCY_WARNING": "응급 상황 알림이 전송되었습니다.",
                 "CASE_CLOSED": "사건이 종료되었습니다."
             }
             
@@ -1579,7 +1638,7 @@ class MonitoringTab(QWidget):
         self.midpoint_reached()
 
     def start_patrol_animation(self):
-        """목적지에 도착 후 순찰 애니메이션 시작
+        """목적지에 도착 시 순찰 애니메이션 시작
         - BASE 위치에서는 순찰하지 않음
         - 지역별 순찰 반경과 시작 위치는 PATROL_CONFIG 딕셔너리로 관리
         - A 구역에서는 특정 시작점(7시 30분 방향)에서 순찰 시작
@@ -1631,6 +1690,65 @@ class MonitoringTab(QWidget):
         
         if DEBUG:
             print(f"{self.current_location} 위치에서 순찰 애니메이션 시작 (반경: {self.patrol_radius}px, 속도: {self.patrol_speed}도/초, 시작각도: {self.patrol_angle}도)")
+
+    def start_patrol_animation_from_current(self):
+        """현재 위치에서 바로 순찰 애니메이션 시작 (사전 위치 이동 없이)
+        - move_to_patrol_start_position() 과정을 건너뛰고 현재 각도에서 시작
+        - 각종 상태 플래그를 설정하고 애니메이션 시작
+        """
+        # BASE 위치에서는 순찰 애니메이션 비활성화
+        if self.current_location == 'BASE':
+            if DEBUG:
+                print("BASE 위치입니다. 순찰 애니메이션을 시작하지 않습니다.")
+            return
+            
+        # 순찰 중심점 설정 (현재 로봇 위치)
+        center_pos = self.LOCATIONS[self.current_location]
+        self.patrol_center = center_pos
+        
+        # 현재 위치에 대한 구역별 순찰 설정 가져오기
+        patrol_config = self.PATROL_CONFIG.get(self.current_location, {
+            'radius': 60,       # 기본 반경
+            'start_angle': 0,   # 기본 시작 각도 (3시 방향)
+            'speed': 5          # 기본 속도 (도/초)
+        })
+        
+        # 설정 적용 (반경과 속도만 적용, 현재 위치 기준 각도는 계산)
+        self.patrol_radius = patrol_config['radius']
+        self.patrol_speed = patrol_config['speed']
+        
+        # 현재 로봇 위치에서 각도 계산
+        current_x = self.robot_label.x() + 20  # 로봇 중심점 (폭의 절반)
+        current_y = self.robot_label.y() + 20  # 로봇 중심점 (높이의 절반)
+        
+        dx = current_x - center_pos.x()
+        dy = center_pos.y() - current_y  # y축은 반대로
+        
+        # 현재 각도 계산 (라디안에서 도로 변환)
+        self.patrol_angle = math.degrees(math.atan2(dy, dx)) % 360
+        
+        if DEBUG:
+            print(f"현재 위치에서 순찰 시작 - 위치: {self.current_location}, 반경: {self.patrol_radius}, 각도: {self.patrol_angle:.1f}°")
+        
+        # 경로선 제거 재확인
+        if hasattr(self, 'path_line') and self.path_line:
+            self.path_line.setParent(None)
+            self.path_line = None
+            if DEBUG:
+                print("경로선 제거 (순찰 시작 전)")
+        
+        # 로그 추가
+        self.append_log(f"{self.current_location} 위치에서 현재 각도({self.patrol_angle:.1f}°)로 순찰 시작")
+        
+        # 순찰 상태 설정 및 UI 업데이트
+        self.is_patrolling = True
+        self.update_robot_status('patrolling')
+        
+        # 순찰 애니메이션 타이머 시작 (50ms마다 갱신, 초당 20프레임)
+        self.patrol_timer.start(50)
+        
+        if DEBUG:
+            print(f"{self.current_location} 위치에서 현재 각도({self.patrol_angle:.1f}°)로 순찰 애니메이션 시작")
 
     def stop_patrol_animation(self):
         """순찰 애니메이션 정지"""
@@ -1693,6 +1811,22 @@ class MonitoringTab(QWidget):
             # 녹화 표시 타이머 정지
             if hasattr(self, 'recording_blink_timer') and self.recording_blink_timer.isActive():
                 self.recording_blink_timer.stop()
+                
+            # 로봇 아이콘 깜빡임 타이머 정지
+            if hasattr(self, 'blink_timer') and self.blink_timer.isActive():
+                self.blink_timer.stop()
+                
+            # 깜빡임 워커 정지
+            if hasattr(self, 'blink_worker') and hasattr(self.blink_worker, '_running') and self.blink_worker._running:
+                self.blink_worker.stop()
+                
+            # 로봇 아이콘이 있으면 종료 시 반드시 보이게 설정
+            if hasattr(self, 'robot_label'):
+                self.robot_label.setVisible(True)
+                
+            # 깜빡임 워커가 실행 중이라면 정지
+            if hasattr(self, 'blink_worker') and hasattr(self.blink_worker, 'stop'):
+                self.blink_worker.stop()
                 
             if DEBUG:
                 print("MonitoringTab 리소스 정리 완료")
@@ -1862,4 +1996,132 @@ class MonitoringTab(QWidget):
             
         # 오류 메시지를 표시하거나 기본 이미지로 대체할 수 있음
         # 여기서는 간단히 로그만 출력
+    
+    def toggle_robot_visibility(self):
+        """로봇 아이콘 가시성 토글 - 깜빡임 효과 (detected 상태용)
+        
+        이 함수는 QTimer에 의해 1초마다 호출되어 로봇 아이콘의 가시성을 토글함
+        메인 쓰레드를 최소화하기 위해 모든 긴 작업은 QRunnable로 처리
+        """
+        # 상태 토글
+        self.robot_visible = not self.robot_visible
+        
+        # UI 업데이트 (이것만 메인 쓰레드에서 필요)
+        self.robot_label.setVisible(self.robot_visible)
+        
+        if DEBUG and self.current_status == 'detected':
+            print(f"로봇 깜빡임: 가시성 = {self.robot_visible}")
+
+        # detected 상태가 아니면 깜빡임 중지
+        if self.current_status != 'detected' and hasattr(self, 'blink_worker') and hasattr(self.blink_worker, '_running') and self.blink_worker._running:
+            self.blink_worker.stop()
+            self.robot_label.setVisible(True)
+            if DEBUG:
+                print("로봇 깜빡임 중지: 상태 변경됨")
+
+    def apply_color_to_pixmap(self, pixmap, color):
+        """픽스맵에 색상 적용
+        
+        Args:
+            pixmap (QPixmap): 원본 픽스맵
+            color (QColor): 적용할 색상
+            
+        Returns:
+            QPixmap: 색상이 적용된 픽스맵
+        """
+        # 원본 이미지를 QImage로 변환
+        image = pixmap.toImage()
+        
+        # 색상 필터 적용
+        for y in range(image.height()):
+            for x in range(image.width()):
+                pixel_color = QColor(image.pixel(x, y))
+                
+                # 투명한 픽셀은 건너뛰기
+                if pixel_color.alpha() == 0:
+                    continue
+                    
+                # 흰색/투명에 가까운 픽셀은 건너뛰기 (로봇 외곽선만 색상 변경)
+                if pixel_color.red() > 200 and pixel_color.green() > 200 and pixel_color.blue() > 200:
+                    continue
+                
+                # 픽셀 밝기 계산 (0-255)
+                brightness = (pixel_color.red() + pixel_color.green() + pixel_color.blue()) / 3
+                
+                # 원본 이미지의 밝기를 유지하면서 지정된 색상 적용
+                new_red = int(color.red() * brightness / 128)
+                new_green = int(color.green() * brightness / 128)
+                new_blue = int(color.blue() * brightness / 128)
+                
+                # 값 범위 제한 (0-255)
+                new_red = max(0, min(255, new_red))
+                new_green = max(0, min(255, new_green))
+                new_blue = max(0, min(255, new_blue))
+                
+                # 새 색상 적용 (원래 알파값 유지)
+                new_color = QColor(new_red, new_green, new_blue, pixel_color.alpha())
+                image.setPixel(x, y, new_color.rgba())
+                
+        # QImage를 다시 QPixmap으로 변환
+        colored_pixmap = QPixmap.fromImage(image)
+        return colored_pixmap
+
+    def update_robot_icon(self, status=None):
+        """로봇 상태에 따라 아이콘 이미지 변경
+        
+        Args:
+            status (str, optional): 로봇 상태. None이면 현재 상태 사용
+            
+        상태별 이미지:
+            - idle: neighbot_idle_gray.png (회색)
+            - moving: neighbot_moving_black.png (검정색)
+            - patrolling: neighbot_patrolling_blue.png (하늘색)
+            - detected: neighbot_detected_red.png (빨간색, 깜빡임)
+        """
+        if status is None:
+            status = self.current_status
+        
+        # 상태에 따른 이미지 설정
+        icon_path = self.robot_icons.get(status, self.robot_icons['idle'])
+        
+        # 이미지 로드 및 크기 조정
+        try:
+            robot_pixmap = QPixmap(icon_path)
+            scaled_robot = robot_pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            
+            # 로봇 라벨에 적용
+            self.robot_label.setPixmap(scaled_robot)
+            
+            if DEBUG:
+                print(f"로봇 아이콘 변경: {status} (이미지: {icon_path})")
+            
+            # detected 상태일 때 깜빡임 활성화 (타이머 시작)
+            if status == 'detected':
+                # 깜빡임 워커가 활성화되지 않은 경우에만 시작
+                if not hasattr(self, 'blink_worker') or not hasattr(self.blink_worker, '_running') or not self.blink_worker._running:
+                    # 이전 워커가 있으면 중지
+                    if hasattr(self, 'blink_worker') and hasattr(self.blink_worker, '_running') and self.blink_worker._running:
+                        self.blink_worker.stop()
+                        
+                    # 새 깜빡임 워커 시작
+                    self.blink_worker = BlinkWorker(1000)  # 1초 간격
+                    self.blink_worker.signals.toggle_visibility.connect(self.toggle_robot_visibility)
+                    self.thread_pool.start(self.blink_worker)
+                    self.robot_visible = True
+                    
+                    if DEBUG:
+                        print(f"로봇 깜빡임 시작: detected 상태 (1초 간격)")
+            else:
+                # detected 상태가 아닌 경우 타이머 정지 (깜빡임 중지)
+                if hasattr(self, 'blink_worker') and hasattr(self.blink_worker, '_running') and self.blink_worker._running:
+                    self.blink_worker.stop()
+                    self.robot_label.setVisible(True)  # 반드시 보이게 설정
+                    if DEBUG:
+                        print(f"로봇 깜빡임 중지: {status} 상태")
+        
+        except Exception as e:
+            if DEBUG:
+                print(f"로봇 아이콘 업데이트 실패: {e}")
+                import traceback
+                print(traceback.format_exc())
 

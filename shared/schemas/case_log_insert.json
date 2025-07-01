@@ -1,6 +1,6 @@
 {
    "$schema": "http://json-schema.org/draft-07/schema#",
-   "title": "Log List Response",
+   "title": "Case Log Insert",
    "type": "object",
    "properties": {
       "logs": {
@@ -31,12 +31,6 @@
                "location": {
                   "type": "string",
                   "enum": ["A", "B", "BASE"]
-               },
-               "image_path": {
-                  "type": "string"
-               },
-               "video_path": {
-                  "type": "string"
                },
                "is_ignored": {
                   "type": "integer",
@@ -82,8 +76,6 @@
                "robot_id",
                "user_id",
                "location",
-               "image_path",
-               "video_path",
                "is_ignored",
                "is_119_reported",
                "is_112_reported",

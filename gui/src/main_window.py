@@ -648,6 +648,13 @@ class MainWindow(QMainWindow):
             # 로봇 상태를 patrolling으로 명시적 변경 (CASE_CLOSED와 동일하게)
             self.frozen_status["robot_status"] = "patrolling"
             
+            # 현재 위치가 BASE가 아니면 패트롤링 재개하되, 현재 각도에서 바로 시작
+            if self.frozen_status.get("robot_location") != "BASE":
+                # 현재 위치에서 즉시 패트롤링을 재개 (현재 각도에서 시작)
+                if DEBUG:
+                    print(f"{DEBUG_TAG['DET']} IGNORE 처리: 현재 위치({self.frozen_status.get('robot_location')})에서 패트롤링 재개")
+                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation_from_current)
+            
             # 로봇 이동 버튼 다시 활성화
             self.monitoring_tab.enable_movement_buttons()
             
@@ -655,6 +662,7 @@ class MainWindow(QMainWindow):
                 print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨 (무시 처리)")
                 print(f"{DEBUG_TAG['DET']} frozen_status 업데이트됨 (robot_status: patrolling)")
                 print(f"{DEBUG_TAG['DET']} 로봇 이동 버튼 재활성화")
+                print(f"{DEBUG_TAG['DET']} ================ IGNORE 처리 완료 ================")
 
     def update_response_action(self, action_type):
         """사용자 대응 액션 업데이트
@@ -686,9 +694,10 @@ class MainWindow(QMainWindow):
             # 순찰 재개 로직 추가: BASE가 아닌 경우에만 순찰 재개
             if self.frozen_status.get("robot_location") != "BASE":
                 # 사건 위치가 BASE가 아닌 경우에만 순찰 재개 (약간의 지연을 두고)
-                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation)
+                # 현재 위치에서 바로 패트롤링 시작 (사전 위치 이동 없이)
+                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation_from_current)
                 if DEBUG:
-                    print(f"{DEBUG_TAG['DET']} 사건 종료: 순찰 애니메이션 재개 예약됨 ({self.frozen_status.get('robot_location')} 위치에서)")
+                    print(f"{DEBUG_TAG['DET']} 사건 종료: 현재 위치에서 바로 순찰 애니메이션 재개 예약됨 ({self.frozen_status.get('robot_location')} 위치에서)")
             
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 사건 종료: 로봇 이동 버튼 재활성화")
