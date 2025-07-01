@@ -137,7 +137,11 @@ class DetectionManager:
                 # cv2.waitKey(1)
 
                 # YOLO 예측
+<<<<<<< HEAD
+                yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.65)
+=======
                 yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.5)
+>>>>>>> d3f21370cd9b1073bba7af1342f0d5775888ae36
 
                 # MediaPipe 예측
                 # mediapipe_result = self.mediapipe_detector.predict_raw(frame_id, timestamp, jpeg_bytes)

@@ -11,11 +11,11 @@ from collections import deque, Counter
 class EventAnalyzer(threading.Thread):
     # [추가] Patrolling 상태 진입 후 안정화를 위한 워밍업 시간 (초)
     # 사용자가 제안한 60프레임을 20fps 기준으로 3초로 설정
-    PATROL_WARM_UP_SECONDS = 3.0
+    PATROL_WARM_UP_SECONDS = 1.0
     
-    WINDOW_SECONDS = 3.0
-    STABILITY_THRESHOLD = 0.6
-    MIN_FRAMES_FOR_STABILITY_CHECK = 50
+    WINDOW_SECONDS = 2.0
+    STABILITY_THRESHOLD = 0.4
+    MIN_FRAMES_FOR_STABILITY_CHECK = 40
     CASE_MAPPING = {
         'knife': 'danger',
         'gun': 'danger',
