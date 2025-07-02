@@ -1,4 +1,5 @@
 # 🛡️ NEIGHBOT - AI 기반 자율 순찰 로봇 시스템
+![Uploading image.png…]()
 
 > “Neighborhood + Robot”  
 > 생활 속 위험 요소를 감지하고 대응하는 AI 순찰 시스템
