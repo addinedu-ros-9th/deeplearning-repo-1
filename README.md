@@ -1,5 +1,5 @@
 # 🛡️ NEIGHBOT - AI 기반 자율 순찰 로봇 시스템
-![Uploading image.png…]()
+![neighbot_logo](https://github.com/user-attachments/assets/3d17872c-ab10-4d6a-b9f8-281d113cd8c1)
 
 > “Neighborhood + Robot”  
 > 생활 속 위험 요소를 감지하고 대응하는 AI 순찰 시스템
