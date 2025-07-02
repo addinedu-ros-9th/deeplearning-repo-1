@@ -4,40 +4,44 @@
 """
 Case Logs Tab Module
 로그 조회 탭 UI 및 로직 구현
+- 사건 로그 데이터 표시 및 필터링
+- 상세 정보 및 영상 재생 기능
+- 로그 액션 정보 시각화
 """
 
+# 표준 라이브러리 임포트
 import os
 import sys
 import time
 import traceback
 import subprocess
 from datetime import datetime
-from PyQt5.QtWidgets import (QWidget, QTableWidgetItem, QHeaderView, QMessageBox)
+
+# PyQt5 관련 임포트
+from PyQt5.QtWidgets import QWidget, QTableWidgetItem, QHeaderView, QMessageBox, QLabel
 from PyQt5.QtCore import Qt, QDateTime, QUrl, QTimer
-from PyQt5.QtWidgets import QLabel
 from PyQt5.QtGui import QPixmap
 from PyQt5.uic import loadUi
 
-# 비디오 재생을 위한 imports
+# 비디오 재생 관련 임포트
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtMultimediaWidgets import QVideoWidget
-# VLC 미디어 플레이어 import
-import vlc
+import vlc  # VLC 미디어 플레이어
 
-# libva 메시지 표시 레벨 설정 (0: 없음)
+# libva 메시지 표시 레벨 설정 (0: 없음 - 성능 향상 목적)
 os.environ["LIBVA_MESSAGING_LEVEL"] = "0"
 
-# 디버그 모드
-DEBUG = True
+# 디버그 설정
+DEBUG = True  # True: 디버그 로그 출력, False: 로그 출력 안함
 
-# 디버그 태그
+# 디버그 태그 (로그 분류용)
 DEBUG_TAG = {
-    'INIT': '[초기화]',
-    'CONN': '[연결]',
-    'RECV': '[수신]',
-    'SEND': '[전송]',
-    'FILTER': '[필터]',
-    'ERR': '[오류]'
+    'INIT': '[초기화]',  # 초기화 관련 로그
+    'CONN': '[연결]',    # 네트워크 연결 로그
+    'RECV': '[수신]',    # 데이터 수신 로그
+    'SEND': '[전송]',    # 데이터 전송 로그
+    'FILTER': '[필터]',  # 데이터 필터링 로그
+    'ERR': '[오류]'      # 오류 로그
 }
 
 # 탭 내부 상태 관리를 위한 상수들
@@ -46,6 +50,12 @@ DEBUG_TAG = {
 class CaseLogsTab(QWidget):
     """
     사건 로그 조회 탭 클래스
+    
+    주요 기능:
+    - 사건 로그 데이터 표시 및 필터링
+    - 로그 상세 정보 및 증거 영상 재생
+    - 로그별 대응 액션 조회
+    - 시간, 위치, 이벤트 타입별 필터링
     """
     
     def __init__(self, parent=None, initial_logs=None):
@@ -77,8 +87,8 @@ class CaseLogsTab(QWidget):
             self.tableWidget.setHorizontalHeaderLabels([
                 "Case ID", "Case Closed", "Ignored", "Case Type", "Detection Type", 
                 "Start Time", "End Time", "Robot ID", "User Name", "Location", 
-                "Reported to 119", "Reported to 112", "Illegal Warning", "Danger Warning", 
-                "Emergency Warning"
+                "Reported to 119", "Reported to 112", "Illegal", "Danger", 
+                "Emergency"
             ])
             
             # 테이블 열 너비를 내용에 맞게 조정 (자동 늘어나지 않도록 설정)
@@ -290,7 +300,7 @@ class CaseLogsTab(QWidget):
             self.comboBox_action_type.addItem("All Actions")
             action_types = [
                 "Reported to 119", "Reported to 112", "Case Closed", 
-                "Danger Warning", "Emergency Warning", "Illegal Warning", "Ignored"
+                "Danger", "Emergency", "Illegal", "Ignored"
             ]
             
             # 액션 타입 매핑 (영어로만 표시, 매핑 필요 없음)

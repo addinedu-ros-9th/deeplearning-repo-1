@@ -1,4 +1,4 @@
-# main_server/data_merger.py (녹화 기능이 추가된 최종 버전)
+# main_server/data_merger.py (case_type 처리 기능이 수정된 최종 버전)
 
 import threading
 import queue
@@ -10,34 +10,114 @@ import os
 import cv2
 import numpy as np
 from datetime import datetime, timedelta
+from collections import deque
+
+from filterpy.kalman import KalmanFilter
+from filterpy.common import Q_discrete_white_noise
+
+# --- 유틸리티 함수 (기존과 동일) ---
+def iou(boxA, boxB):
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+    return interArea / float(boxAArea + boxBArea - interArea)
+
+def convert_bbox_to_z(bbox):
+    w = bbox[2] - bbox[0]
+    h = bbox[3] - bbox[1]
+    x = bbox[0] + w / 2.
+    y = bbox[1] + h / 2.
+    return np.array([x, y, w, h]).reshape(4, 1)
+
+def convert_x_to_bbox(x):
+    w = x[2]
+    h = x[3]
+    return np.array([x[0] - w / 2., x[1] - h / 2., x[0] + w / 2., x[1] + h / 2.]).flatten()
+
+
+# 1. TrackedObject 클래스 수정
+class TrackedObject:
+    """ 추적되는 각 객체의 정보를 담는 클래스 """
+    next_id = 0
+    # ✨ [수정 1] __init__ 메소드에 case_type 파라미터 추가
+    def __init__(self, initial_bbox, label, confidence, case_type):
+        self.id = TrackedObject.next_id
+        TrackedObject.next_id += 1
+        
+        self.label = label
+        self.confidence = confidence
+        self.case_type = case_type  # ✨ case_type 저장
+        self.last_updated = time.time()
+        self.missed_frames = 0
+        
+        # --- 칼만 필터 설정 (상수 속도 모델) ---
+        self.kf = KalmanFilter(dim_x=8, dim_z=4)
+        dt = 1.0
+        self.kf.F = np.array([[1,0,0,0,dt,0,0,0], 
+                              [0,1,0,0,0,dt,0,0], 
+                              [0,0,1,0,0,0,dt,0], 
+                              [0,0,0,1,0,0,0,dt],
+                              [0,0,0,0,1,0,0,0], 
+                              [0,0,0,0,0,1,0,0], 
+                              [0,0,0,0,0,0,1,0], 
+                              [0,0,0,0,0,0,0,1]], dtype=float)
+        self.kf.H = np.array([[1,0,0,0,0,0,0,0], 
+                              [0,1,0,0,0,0,0,0], 
+                              [0,0,1,0,0,0,0,0], 
+                              [0,0,0,1,0,0,0,0]], dtype=float)
+        # [튜닝 포인트 1] 측정 노이즈 (R)
+        # AI 탐지 결과를 얼마나 신뢰할지 결정합니다.
+        # - 값을 '낮추면': AI 탐지 결과를 더 신뢰하게 되어, 객체가 갑자기 크게 움직여도 필터가 빠르게 따라갑니다. (단, 탐지 결과가 불안정하면 트랙이 튈 수 있음)
+        # - 값을 '높이면': 예측값을 더 신뢰하게 되어, 추적이 더 부드러워집니다. (기본값)
+        self.kf.R *= 5.  # 현재 값. 아주 빠른 추적을 원하면 1. ~ 5. 사이로 낮춰보세요.
+        # [튜닝 포인트 2] 프로세스 노이즈 (Q)
+        # 객체의 움직임(가속도)이 얼마나 불확실한지 결정합니다. 이 값이 가장 중요합니다.
+        # - 값을 '높이면': 객체의 속도가 갑자기 변할 것이라고 가정하므로, 매우 빠른 움직임이나 방향 전환에 더 잘 반응합니다.
+        # - 값을 '낮추면': 객체가 등속도로 움직일 것이라고 가정하므로, 움직임이 부드러워집니다.
+        q_val = 0.1  # 현재 값. 아주 빠른 추적을 원하면 이 값을 1.0, 5.0, 10.0 등으로 점차 높여보세요.
+        
+        self.kf.Q = Q_discrete_white_noise(dim=2, dt=1.0, var=q_val, block_size=4, order_by_dim=False)
+        
+        self.kf.P *= 100.
+        initial_state = convert_bbox_to_z(initial_bbox).flatten()
+        self.kf.x = np.array([initial_state[0], initial_state[1], initial_state[2], initial_state[3], 0, 0, 0, 0]).T
+
+    def predict(self):
+        self.confidence *= 0.95 
+        self.kf.predict()
+        return self.kf.x
+    
+    # ✨ [수정 2] update 메소드에 case_type 파라미터 추가 (필요시 사용)
+    def update(self, bbox, confidence, case_type):
+        self.kf.update(convert_bbox_to_z(bbox))
+        self.confidence = confidence
+        self.case_type = case_type # case_type도 업데이트
+        self.last_updated = time.time()
+        self.missed_frames = 0
+
 
 class DataMerger(threading.Thread):
-    """
-    ImageManager로부터 이미지 데이터를, EventAnalyzer로부터 AI 분석 결과를 받아
-    하나의 데이터로 병합합니다.
-    - 병합된 데이터(JSON + 이미지)를 GUI로 전송합니다.
-    - 'detected' 상태가 되면 Bounding Box가 그려진 영상을 파일로 녹화하고 저장합니다.
-    - DBManager로부터 녹화 종료 신호를 받아 파일명을 최종적으로 변경합니다.
-    """
     def __init__(self, image_queue, event_queue, gui_listen_addr, robot_status):
         super().__init__()
         self.name = "DataMerger"
         self.running = True
-
         self.image_queue = image_queue
         self.event_queue = event_queue
         self.gui_send_queue = queue.Queue(maxsize=100)
         self.robot_status = robot_status
-
         self.image_buffer = {}
         self.event_buffer = {}
         self.buffer_lock = threading.Lock()
-
         self.gui_listen_addr = gui_listen_addr
         self.gui_server_socket = None
         self.gui_client_socket = None
-
-        # --- 녹화 기능 관련 변수 추가 ---
+        self.tracked_objects = {}
+        self.iou_threshold = 0.3
+        self.max_missed_frames = 10
         self.is_recording = False
         self.video_writer = None
         self.temp_img_path = None
@@ -45,11 +125,10 @@ class DataMerger(threading.Thread):
         self.base_dir = 'main_server'
         os.makedirs(os.path.join(self.base_dir, 'images'), exist_ok=True)
         os.makedirs(os.path.join(self.base_dir, 'videos'), exist_ok=True)
-        
-        print(f"[{self.name}] 초기화 완료. GUI 연결 대기 주소: {self.gui_listen_addr}")
-        print(f"[{self.name}] 녹화 기능 초기화 완료. 저장 폴더: {self.base_dir}/(images, videos)")
+        print(f"[{self.name}] 초기화 완료 (객체 추적 칼만 필터 적용).")
 
-
+    # --- run, _gui_... 쓰레드, _process_... 프레임 관련 메소드 등은 기존과 동일 ---
+    # ... (기존 코드 생략) ...
     def run(self):
         print(f"[{self.name}] 스레드 시작.")
         threads = [
@@ -135,75 +214,167 @@ class DataMerger(threading.Thread):
 
 
     def _merge_and_record_thread(self):
-            """
-            데이터를 병합하고, 상태에 따라 녹화를 수행하는 메인 처리 스레드.
-            [수정] 모든 상태에서 타임아웃을 짧게 유지하여 영상 멈춤 현상을 해결합니다.
-            """
-            while self.running:
-                # DBManager로부터 오는 녹화 종료 신호 확인
-                stop_signal = self.robot_status.get('recording_stop_signal')
-                if self.is_recording and stop_signal:
-                    self._stop_recording(stop_signal)
-                    self.robot_status['recording_stop_signal'] = None # 신호 처리 후 초기화
-                processed_ids = set()
-                with self.buffer_lock:
-                    # 1. 병합 (AI 결과 + 이미지)
-                    # AI 분석 결과가 있는 프레임을 우선적으로 처리합니다.
-                    common_ids = self.image_buffer.keys() & self.event_buffer.keys()
-                    for fid in common_ids:
-                        # 버퍼에 키가 없는 경우를 대비한 방어 코드
-                        if fid not in self.image_buffer or fid not in self.event_buffer: continue
-                        jpeg_binary, timestamp, _ = self.image_buffer[fid]
-                        event_data, _ = self.event_buffer[fid]
-                        self._process_merged_frame(fid, timestamp, jpeg_binary, event_data)
-                        processed_ids.add(fid)
-                    # 2. 타임아웃된 이미지 단독 처리
-                    # [핵심 수정!] patrolling 상태의 timeout 을 2초가 아닌 0.1초로 대폭 줄입니다.
-                    # 이렇게 하면 모든 상태에서 AI 결과를 기다리지 않고 빠르게 영상이 전송됩니다.
-                    timeout = timedelta(seconds= 0.3)
-                    now = datetime.now()
-                    # 버퍼에 있는 모든 이미지를 순회하며 타임아웃이 지났는지 확인
-                    old_image_ids = {fid for fid, (_, _, ts) in self.image_buffer.items() if now - ts > timeout}
-                    for fid in old_image_ids:
-                        # 이미 병합 처리된 프레임은 건너뜁니다.
-                        if fid in processed_ids: continue
-                        # 버퍼에 키가 없는 경우를 대비한 방어 코드
-                        if fid not in self.image_buffer: continue
-                        jpeg_binary, timestamp, _ = self.image_buffer[fid]
-                        # 현재 상태를 다시 한번 확인하여 정확하게 전달
-                        current_state = self.robot_status.get('state', 'idle')
-                        self._process_unmerged_frame(fid, timestamp, jpeg_binary, current_state)
-                        processed_ids.add(fid)
-                    # 3. 버퍼 정리
-                    # 처리된 프레임들을 버퍼에서 제거합니다.
-                    for fid in processed_ids:
-                        self.image_buffer.pop(fid, None)
-                        self.event_buffer.pop(fid, None) # 병합되었을 수 있으므로 이벤트 버퍼에서도 제거
-                # CPU 사용량을 줄이기 위한 짧은 대기
-                time.sleep(0.03)
+        """ 데이터를 병합하고, 상태에 따라 녹화 및 객체 추적을 수행하는 메인 스레드 """
+        while self.running:
+            stop_signal = self.robot_status.get('recording_stop_signal')
+            if self.is_recording and stop_signal:
+                self._stop_recording(stop_signal)
+                self.robot_status['recording_stop_signal'] = None
+                
+            processed_ids = set()
+            with self.buffer_lock:
+                common_ids = self.image_buffer.keys() & self.event_buffer.keys()
+                for fid in common_ids:
+                    if fid not in self.image_buffer or fid not in self.event_buffer: continue
+                    jpeg_binary, timestamp, _ = self.image_buffer[fid]
+                    event_data, _ = self.event_buffer[fid]
+                    self._process_merged_frame(fid, timestamp, jpeg_binary, event_data)
+                    processed_ids.add(fid)
+
+                timeout = timedelta(seconds=0.3)
+                now = datetime.now()
+                old_image_ids = {fid for fid, (_, _, ts) in self.image_buffer.items() if now - ts > timeout}
+                for fid in old_image_ids:
+                    if fid in processed_ids: continue
+                    if fid not in self.image_buffer: continue
+                    jpeg_binary, timestamp, _ = self.image_buffer[fid]
+                    current_state = self.robot_status.get('state', 'idle')
+                    self._process_unmerged_frame(fid, timestamp, jpeg_binary, current_state)
+                    processed_ids.add(fid)
+                    
+                for fid in processed_ids:
+                    self.image_buffer.pop(fid, None)
+                    self.event_buffer.pop(fid, None)
+
+            # --- 오래된 추적 객체 제거 ---
+            self._cleanup_tracks()
+            time.sleep(0.03)
 
     def _process_merged_frame(self, frame_id, timestamp, jpeg_binary, event_data):
-        """AI 분석 결과와 병합된 프레임을 처리 (녹화 및 GUI 전송)"""
-        detections = event_data.get('detections', [])
-        # Bounding Box가 그려진 OpenCV 프레임 객체를 받음
-        annotated_frame = self._draw_detections_and_get_frame(jpeg_binary, detections)
+        """ AI 분석 결과와 병합된 프레임을 처리 (객체 추적, 녹화, GUI 전송) """
+        raw_detections = event_data.get('detections', [])
+        
+        # --- 칼만 필터 기반 객체 추적 수행 ---
+        filtered_detections = self._update_tracks(raw_detections)
+
+        annotated_frame = self._draw_detections_and_get_frame(jpeg_binary, filtered_detections)
         if annotated_frame is None: return
 
-        # 녹화 로직
         self._handle_recording(annotated_frame)
         
-        # GUI 전송 준비
         if self.gui_send_queue.full(): return
         _, annotated_jpeg_binary = cv2.imencode('.jpg', annotated_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
 
         merged_json = {
             "frame_id": frame_id,
             "timestamp": timestamp,
-            "detections": detections,
+            "detections": filtered_detections, # 필터링된 탐지 결과 전송
             "robot_status": self.robot_status.get('state', 'detected'),
             "location": self.robot_status.get('current_location', 'unknown')
         }
         self.gui_send_queue.put((merged_json, annotated_jpeg_binary.tobytes()))
+    def _update_tracks(self, new_detections):
+        # ... (기존 예측, 매칭 단계는 동일) ...
+        # 1. 예측 단계: 모든 추적 객체의 다음 상태를 예측
+        predicted_bboxes = {}
+        for track_id, tracker in self.tracked_objects.items():
+            predicted_state = tracker.predict()
+            predicted_bboxes[track_id] = convert_x_to_bbox(predicted_state)
+            tracker.missed_frames += 1
+
+        # 2. 매칭 단계: 예측된 바운딩 박스와 새로운 탐지 결과를 IoU 기반으로 매칭
+        unmatched_detections = list(range(len(new_detections)))
+        matched_pairs = []
+
+        if len(predicted_bboxes) > 0 and len(new_detections) > 0:
+            iou_matrix = np.zeros((len(predicted_bboxes), len(new_detections)), dtype=float)
+            track_ids = list(predicted_bboxes.keys())
+            for t, track_id in enumerate(track_ids):
+                for d, det in enumerate(new_detections):
+                    iou_matrix[t, d] = iou(predicted_bboxes[track_id], det['box'])
+            
+            # 가장 IoU가 높은 쌍부터 매칭
+            while iou_matrix.max() > self.iou_threshold:
+                t, d = np.unravel_index(np.argmax(iou_matrix), iou_matrix.shape)
+                matched_pairs.append((track_ids[t], d))
+                if d in unmatched_detections:
+                    unmatched_detections.remove(d)
+                iou_matrix[t, :] = -1
+                iou_matrix[:, d] = -1
+
+        # 3. 업데이트 단계
+        # ✨ [수정 3] 매칭된 객체 업데이트 시 case_type도 전달
+        for track_id, det_idx in matched_pairs:
+            det = new_detections[det_idx]
+            self.tracked_objects[track_id].update(
+                det['box'],
+                det.get('confidence', 0.9),
+                det.get('case', 'unknown') # case_type 전달
+            )
+
+        # ✨ [수정 4] 새로운 객체 생성 시 case_type도 전달
+        for det_idx in unmatched_detections:
+            det = new_detections[det_idx]
+            new_tracker = TrackedObject(
+                det['box'],
+                det['label'],
+                det.get('confidence', 0.9),
+                det.get('case', 'unknown') # case_type 전달
+            )
+            self.tracked_objects[new_tracker.id] = new_tracker
+            print(f"[{self.name}] 새로운 객체 추적 시작: ID {new_tracker.id} ({det['label']})")
+
+        # ✨ [수정 5] 최종 결과 생성 시 case_type 포함
+        final_detections = []
+        for track_id, tracker in self.tracked_objects.items():
+            if tracker.missed_frames < 2:
+                final_detections.append({
+                    'track_id': track_id,
+                    'label': tracker.label,
+                    'case': tracker.case_type, # case_type 포함
+                    'box': convert_x_to_bbox(tracker.kf.x).tolist(),
+                    'confidence': tracker.confidence
+                })
+        return final_detections
+    def _cleanup_tracks(self):
+        """ 오래 추적되지 않은 객체를 제거합니다. """
+        dead_tracks = [tid for tid, t in self.tracked_objects.items() if t.missed_frames > self.max_missed_frames]
+        for tid in dead_tracks:
+            print(f"[{self.name}] 객체 추적 종료: ID {tid} ({self.tracked_objects[tid].label})")
+            del self.tracked_objects[tid]
+
+    def _draw_detections_and_get_frame(self, jpeg_binary, detections):
+        """ JPEG 바이너리를 디코드하고 Bounding Box와 추적 ID 및 case type에 따라 색상을 입힌 뒤, OpenCV 프레임 객체를 반환 """
+        try:
+            np_arr = np.frombuffer(jpeg_binary, np.uint8)
+            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+            if frame is None: return None
+
+            if detections:
+                for det in detections:
+                    box = det.get('box')
+                    case_type = det.get('case', 'unknown')
+                    if not box or len(box) != 4: continue
+                    x1, y1, x2, y2 = map(int, box)
+
+                    color = (0, 255, 0)  # 기본 초록색 (emergency)
+                    if case_type == 'danger':
+                        color = (0, 0, 255)  # 빨간색
+                    elif case_type == 'illegal':
+                        color = (255, 0, 0)  # 파란색
+
+                    # 추적 ID, 레이블 및 신뢰도 표시
+                    label = det.get('label', 'unknown')
+                    confidence = det.get('confidence', 0.0)
+                    text = f"{label}: {confidence:.2f}"
+
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+            return frame
+        except Exception as e:
+            print(f"[{self.name}] 이미지 드로잉 오류: {e}")
+            return None
 
     def _process_unmerged_frame(self, frame_id, timestamp, jpeg_binary, current_state):
         """병합되지 않은 프레임 처리 (녹화 및 GUI 전송)"""
@@ -235,28 +406,6 @@ class DataMerger(threading.Thread):
             if self.video_writer:
                 self.video_writer.write(frame)
     
-    def _draw_detections_and_get_frame(self, jpeg_binary, detections):
-        """JPEG 바이너리를 디코드하고 Bounding Box를 그린 뒤, OpenCV 프레임 객체를 반환"""
-        try:
-            np_arr = np.frombuffer(jpeg_binary, np.uint8)
-            frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-            if frame is None: return None
-
-            if detections:
-                for det in detections:
-                    box = det.get('box')
-                    if not box or len(box) != 4: continue
-                    x1, y1, x2, y2 = map(int, box)
-                    label = det.get('label', 'unknown')
-                    text = f"{label}: {det.get('confidence', 0.0):.2f}"
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-                    cv2.putText(frame, text, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-            
-            return frame
-        except Exception as e:
-            print(f"[{self.name}] 이미지 드로잉 오류: {e}")
-            return None
-
     def _start_recording(self, first_frame):
         """첫 프레임을 받아 녹화를 시작하고 임시 썸네일을 저장"""
         print(f"[{self.name}] 상태 'detected' 감지. 임시 파일로 녹화 시작.")

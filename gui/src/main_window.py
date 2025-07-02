@@ -1,48 +1,74 @@
 # gui/src/main_window.py
+"""
+메인 윈도우 모듈
+- 메인 애플리케이션 윈도우 구현
+- 탐지 데이터 수신 및 처리
+- 모니터링 및 로그 탭 관리
+- 사용자 응답 처리
+"""
 
+# 표준 라이브러리 임포트
 import json
 import socket
 import traceback
 from datetime import datetime, timedelta, timezone
+
+# PyQt5 관련 임포트
 from PyQt5.QtWidgets import QMainWindow, QMessageBox
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QThread, pyqtSignal, Qt, QTimer
 from PyQt5.uic import loadUi
+
+# 애플리케이션 모듈 임포트
 from gui.tabs.monitoring_tab import MonitoringTab
 from gui.tabs.case_logs_tab import CaseLogsTab
 from shared.protocols import CMD_MAP, GET_LOGS
 from gui.src.detection_dialog import DetectionDialog
 
-# 디버그 모드
-DEBUG = True
+# 디버그 설정
+DEBUG = True  # True: 디버그 로그 출력, False: 로그 출력 안함
 
-# 디버그 태그
+# 디버그 태그 (로그 분류용)
 DEBUG_TAG = {
-    'INIT': '[초기화]',
-    'CONN': '[연결]',
-    'RECV': '[수신]',
-    'SEND': '[전송]',
-    'DET': '[탐지]',
-    'IMG': '[이미지]',
-    'ERR': '[오류]'
+    'INIT': '[초기화]',  # 초기화 관련 로그
+    'CONN': '[연결]',    # 네트워크 연결 로그
+    'RECV': '[수신]',    # 데이터 수신 로그
+    'SEND': '[전송]',    # 데이터 전송 로그
+    'DET': '[탐지]',     # 객체 탐지 로그
+    'IMG': '[이미지]',   # 이미지 처리 로그
+    'ERR': '[오류]'      # 오류 로그
 }
 
-# 한국 시간대(타임존) 설정 - 전역 변수
-# 한국 표준시(KST)는 UTC+9 입니다
+# 시간대 설정
 KOREA_TIMEZONE = timezone(timedelta(hours=9))  # UTC+9 (한국 표준시, KST)
 
-# 서버 설정
-SERVER_IP = "127.0.0.1"  # localhost
-GUI_MERGER_PORT = 9004       # data_merger 통신 포트
-ROBOT_COMMANDER_PORT = 9006  # 로봇 커맨더 포트
-DB_MANAGER_HOST = "127.0.0.1" # 로컬호스트
-DB_MANAGER_PORT = 9005      # GUI가 db 관련해서 접속할 포트
+# 네트워크 설정
+SERVER_IP = "127.0.0.1"       # 서버 IP (localhost)
+GUI_MERGER_PORT = 9004        # 데이터 병합기 통신 포트
+ROBOT_COMMANDER_PORT = 9006   # 로봇 명령 포트
+DB_MANAGER_HOST = "127.0.0.1" # DB 매니저 호스트
+DB_MANAGER_PORT = 9005        # DB 매니저 포트
 
-# 지역 이동 명령 목록
-MOVEMENT_COMMANDS = [CMD_MAP['MOVE_TO_A'], CMD_MAP['MOVE_TO_B'], CMD_MAP['RETURN_TO_BASE']]
+# 로봇 이동 명령 목록
+MOVEMENT_COMMANDS = [
+    CMD_MAP['MOVE_TO_A'],     # A 구역으로 이동
+    CMD_MAP['MOVE_TO_B'],     # B 구역으로 이동
+    CMD_MAP['RETURN_TO_BASE'] # 기지로 복귀
+]
 
 class DataReceiverThread(QThread):
-    """서버로부터 데이터를 수신하는 스레드"""
+    """
+    서버로부터 데이터를 수신하는 스레드
+    
+    주요 기능:
+    - 서버와의 소켓 연결 관리
+    - 탐지 데이터 및 이미지 수신
+    - 연결 상태 모니터링
+    
+    Signals:
+        detection_received (dict, bytes): 탐지 정보와 이미지 데이터
+        connection_status (bool): 서버 연결 상태
+    """
     detection_received = pyqtSignal(dict, bytes)  # (json_data, image_data)
     connection_status = pyqtSignal(bool)          # 연결 상태
 
@@ -183,7 +209,15 @@ class DataReceiverThread(QThread):
             raise
 
 class MainWindow(QMainWindow):
-    """메인 윈도우"""
+    """
+    메인 윈도우 클래스
+    
+    주요 기능:
+    - 모니터링 및 로그 탭 관리
+    - 서버와 통신하여 탐지 데이터 수신
+    - 탐지 이벤트 처리 및 대응 관리
+    - 로봇 명령 전송 및 상태 모니터링
+    """
     # :sparkles: __init__ 메서드 시그니처를 수정합니다.
     def __init__(self, user_id=None, user_name=None):
         super().__init__()
@@ -380,7 +414,7 @@ class MainWindow(QMainWindow):
         if start:
             # 현재 위치에 따른 이동 버튼 활성화
             current_location = self.monitoring_tab.current_location
-            robot_status = json_data.get('robot_status', 'patrolling') if 'json_data' in locals() else 'patrolling'
+            robot_status = 'patrolling'  # 기본값 설정
             
             if DEBUG:
                 print(f"{DEBUG_TAG['IMG']} 스트리밍 시작: 이동 버튼 활성화 (위치: {current_location}, 상태: {robot_status})")
@@ -648,6 +682,13 @@ class MainWindow(QMainWindow):
             # 로봇 상태를 patrolling으로 명시적 변경 (CASE_CLOSED와 동일하게)
             self.frozen_status["robot_status"] = "patrolling"
             
+            # 현재 위치가 BASE가 아니면 패트롤링 재개하되, 현재 각도에서 바로 시작
+            if self.frozen_status.get("robot_location") != "BASE":
+                # 현재 위치에서 즉시 패트롤링을 재개 (현재 각도에서 시작)
+                if DEBUG:
+                    print(f"{DEBUG_TAG['DET']} IGNORE 처리: 현재 위치({self.frozen_status.get('robot_location')})에서 패트롤링 재개")
+                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation_from_current)
+            
             # 로봇 이동 버튼 다시 활성화
             self.monitoring_tab.enable_movement_buttons()
             
@@ -655,6 +696,7 @@ class MainWindow(QMainWindow):
                 print(f"{DEBUG_TAG['DET']} 상태 표시 고정 해제됨 (무시 처리)")
                 print(f"{DEBUG_TAG['DET']} frozen_status 업데이트됨 (robot_status: patrolling)")
                 print(f"{DEBUG_TAG['DET']} 로봇 이동 버튼 재활성화")
+                print(f"{DEBUG_TAG['DET']} ================ IGNORE 처리 완료 ================")
 
     def update_response_action(self, action_type):
         """사용자 대응 액션 업데이트
@@ -686,9 +728,10 @@ class MainWindow(QMainWindow):
             # 순찰 재개 로직 추가: BASE가 아닌 경우에만 순찰 재개
             if self.frozen_status.get("robot_location") != "BASE":
                 # 사건 위치가 BASE가 아닌 경우에만 순찰 재개 (약간의 지연을 두고)
-                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation)
+                # 현재 위치에서 바로 패트롤링 시작 (사전 위치 이동 없이)
+                QTimer.singleShot(500, self.monitoring_tab.start_patrol_animation_from_current)
                 if DEBUG:
-                    print(f"{DEBUG_TAG['DET']} 사건 종료: 순찰 애니메이션 재개 예약됨 ({self.frozen_status.get('robot_location')} 위치에서)")
+                    print(f"{DEBUG_TAG['DET']} 사건 종료: 현재 위치에서 바로 순찰 애니메이션 재개 예약됨 ({self.frozen_status.get('robot_location')} 위치에서)")
             
             if DEBUG:
                 print(f"{DEBUG_TAG['DET']} 사건 종료: 로봇 이동 버튼 재활성화")

@@ -3,22 +3,29 @@
     "title": "Login Response",
     "type": "object",
     "properties": {
-        "user_name": {
+        "id": {
             "type": "string",
-            "description": "로그인된 사용자 이름",
+            "description": "사용자 ID",
+            "minLength": 1
+        },
+        "name": {
+            "type": "string",
+            "description": "사용자 이름",
             "minLength": 1
         },
         "result": {
             "type": "string",
             "enum": [
                 "succeed",
-                "fail"
+                "id_error",
+                "password_error"
             ],
             "description": "로그인 결과"
         }
     },
     "required": [
-        "user_name",
+        "id",
+        "name",
         "result"
     ],
     "additionalProperties": false

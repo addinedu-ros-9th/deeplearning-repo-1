@@ -1,10 +1,18 @@
 # gui/src/detection_dialog.py
+"""
+탐지 다이얼로그 모듈
+- 로봇이 탐지한 객체나 상황 정보를 사용자에게 표시
+- 사용자가 무시하거나 조치를 취할 수 있는 인터페이스 제공
+"""
 
+# 표준 라이브러리 임포트
+import traceback
+
+# PyQt5 관련 임포트
 from PyQt5.QtWidgets import QDialog
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import pyqtSignal, Qt
 from PyQt5.uic import loadUi
-import traceback
 
 class DetectionDialog(QDialog):
     """탐지 결과를 표시하는 팝업 다이얼로그"""

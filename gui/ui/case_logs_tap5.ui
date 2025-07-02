@@ -417,17 +417,17 @@ QSlider::handle:horizontal {
    </column>
    <column>
     <property name="text">
-     <string>Illegal Activity Warning</string>
+     <string>Illegal</string>
     </property>
    </column>
    <column>
     <property name="text">
-     <string>Danger Warning</string>
+     <string>Danger</string>
     </property>
    </column>
    <column>
     <property name="text">
-     <string>Emergency Warning</string>
+     <string>Emergency</string>
     </property>
    </column>
    <column/>

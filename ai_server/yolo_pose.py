@@ -31,7 +31,7 @@ class YOLOPoseDetector:
 
 
             # 박스 감지 결과 추가
-            box_results = self.box_model.predict(frame, conf=conf_thresh, verbose=False)
+            box_results = self.box_model.predict(frame, conf=0.5, verbose=False)
             if len(box_results) > 0:
                 for r in box_results:
                     for box in r.boxes:

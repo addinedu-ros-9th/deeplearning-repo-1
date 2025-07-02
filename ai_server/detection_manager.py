@@ -137,12 +137,12 @@ class DetectionManager:
                 # cv2.waitKey(1)
 
                 # YOLO 예측
-                yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes)
+                yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.65)
 
                 # MediaPipe 예측
                 # mediapipe_result = self.mediapipe_detector.predict_raw(frame_id, timestamp, jpeg_bytes)
                 # POSE 에측
-                pose_result = self.yolo_pose_detector.predict_raw(frame_id, timestamp, jpeg_bytes)
+                pose_result = self.yolo_pose_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.5)
 
                 # 결과 병합
                 merged_result = {
