@@ -231,7 +231,7 @@ class DataMerger(threading.Thread):
                     self._process_merged_frame(fid, timestamp, jpeg_binary, event_data)
                     processed_ids.add(fid)
 
-                timeout = timedelta(seconds=0.3)
+                timeout = timedelta(seconds=0.4)
                 now = datetime.now()
                 old_image_ids = {fid for fid, (_, _, ts) in self.image_buffer.items() if now - ts > timeout}
                 for fid in old_image_ids:

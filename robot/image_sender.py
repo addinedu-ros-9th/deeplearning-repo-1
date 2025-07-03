@@ -10,7 +10,7 @@ KST = timezone(timedelta(hours=9))  # 한국시간으로 변경
 #/home/robolee/venv/dl_venv/bin/python3 /home/robolee/dev_ws/deeplearning-repo-1/robot/image_sender.py
 
 # ✅ 설정: 수신기 IP 및 포트
-SERVER_IP = '192.168.0.6'   # 수신기 (메인서버) IP
+SERVER_IP = '192.168.0.8'   # 수신기 (메인서버) IP
 SERVER_PORT = 9001
 
 # ✅ 현재 로컬 IP 확인
@@ -53,7 +53,7 @@ print(f"✅ 네트워크 연결 상태 확인됨. 전송을 시작합니다.\n")
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 # Try camera index 2 first, fallback to 0 if not available
 cap = None
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(2)
 # for camera_idx in [2, 0]:
 #     cap = cv2.VideoCapture(camera_idx)
 #     if cap.isOpened():

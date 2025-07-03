@@ -10,7 +10,7 @@ from .db_manager import DBManager
 from .robot_commander import RobotCommander
 
 # --- 전역 설정 (이전과 동일) ---
-ROBOT_HOST = "192.168.0.4"
+ROBOT_HOST = "192.168.0.38"
 IMAGE_RECV_PORT = 9001
 ROBOT_CONTROLLER_PORT = 9008
 AI_SERVER_HOST = "127.0.0.1"

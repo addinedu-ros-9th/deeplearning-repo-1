@@ -14,7 +14,7 @@ import datetime  # 위쪽에 추가
 
 
 
-HOST_IP = "127.0.0.1"
+HOST_IP = "192.168.0.38"
 UDP_PORT = 9002 # AI 서버가 수신 대기하는 포트
 TCP_PORT = 9003 # Main 서버에 송신하는 포트
 
@@ -137,11 +137,7 @@ class DetectionManager:
                 # cv2.waitKey(1)
 
                 # YOLO 예측
-<<<<<<< HEAD
                 yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.65)
-=======
-                yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.5)
->>>>>>> d3f21370cd9b1073bba7af1342f0d5775888ae36
 
                 # MediaPipe 예측
                 # mediapipe_result = self.mediapipe_detector.predict_raw(frame_id, timestamp, jpeg_bytes)
