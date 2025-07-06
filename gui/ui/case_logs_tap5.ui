@@ -1,0 +1,605 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1187</width>
+    <height>802</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">/* 전체 배경 및 폰트 */
+QWidget {
+    background-color: #e9f6fe;
+    font-family: &quot;Segoe UI&quot;, &quot;맑은 고딕&quot;, sans-serif;
+    font-size: 14px;
+    color: #222;
+}
+
+/* 탭 스타일 */
+QTabWidget::pane {
+    border: none;
+    background-color: #e9f6fe;
+}
+
+QTabBar::tab {
+    background: #d4f4e6;  /* 비활성 탭: 연한 녹색 */
+    border: 1px solid #aad4f5;
+    border-bottom: none;
+    padding: 6px 20px;
+    min-width: 130px;
+    font-weight: bold;
+    color: #006666;
+    text-align: center;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+QTabBar::tab:selected {
+    background: #2196f3;  /* 활성 탭: 진한 파랑 */
+    color: white;
+}
+
+/* 그룹박스 스타일 */
+QGroupBox {
+    border: 1px solid #cce7f6;
+    border-radius: 5px;
+    font-weight: bold;
+    color: #005b99;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px;
+}
+
+/* 라벨 */
+QLabel {
+    font-size: 14px;
+    color: #222;
+}
+#robot_location, #robot_status, #detections {
+    font-weight: bold;
+    background-color: transparent;
+}
+#label_user_name {
+    font-weight: bold;
+    border: none;
+    font-size: 18px;
+}
+#live_feed_label, #map_display_label, #detection_image {
+    border: 1px solid #b3d9ff;
+    border-radius: 6px;
+}
+
+/* 로그 출력 박스 */
+#textEdit_log_box {
+    background-color: white;
+}
+
+/* 버튼 */
+QPushButton {
+    background-color: #4db8ff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #33aaff;
+}
+QPushButton:pressed {
+    background-color: #2196f3;
+}
+
+/* 콤보박스 */
+QComboBox {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 90px;
+}
+
+/* 날짜/시간 선택기 */
+QDateTimeEdit {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* 테이블 */
+QTableWidget {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    gridline-color: #aad4f5;
+}
+QHeaderView::section {
+    background-color: #d0eafc;
+    font-weight: bold;
+    padding: 6px;
+    border: 1px solid #aad4f5;
+}
+
+/* 슬라이더 */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #cce7f6;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #4db8ff;
+    width: 12px;
+    border-radius: 6px;
+}
+</string>
+  </property>
+  <widget class="QGroupBox" name="groupBox_case_logs_filter">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>10</y>
+     <width>1161</width>
+     <height>151</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>Case Logs Filter</string>
+   </property>
+   <widget class="QLabel" name="label_start_time">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>30</y>
+      <width>71</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Start Time</string>
+    </property>
+   </widget>
+   <widget class="QDateTimeEdit" name="dateTimeEdit_start_date">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>50</y>
+      <width>141</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="displayFormat">
+     <string>yyyy-MM-dd HH:mm</string>
+    </property>
+    <property name="calendarPopup">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_end_time">
+    <property name="geometry">
+     <rect>
+      <x>170</x>
+      <y>30</y>
+      <width>71</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>End Time</string>
+    </property>
+   </widget>
+   <widget class="QDateTimeEdit" name="dateTimeEdit_end_date">
+    <property name="geometry">
+     <rect>
+      <x>170</x>
+      <y>50</y>
+      <width>141</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="displayFormat">
+     <string>yyyy-MM-dd HH:mm</string>
+    </property>
+    <property name="calendarPopup">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="comboBox_case_type">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>100</y>
+      <width>131</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>Case Type</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QComboBox" name="comboBox_detection_type">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>100</y>
+      <width>151</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>Detection Type</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QComboBox" name="comboBox_robot_id">
+    <property name="geometry">
+     <rect>
+      <x>310</x>
+      <y>100</y>
+      <width>131</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>Robot ID</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QComboBox" name="comboBox_location_id">
+    <property name="geometry">
+     <rect>
+      <x>590</x>
+      <y>100</y>
+      <width>131</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>Location</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QComboBox" name="comboBox_user_account">
+    <property name="geometry">
+     <rect>
+      <x>450</x>
+      <y>100</y>
+      <width>131</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>User Name</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QComboBox" name="comboBox_action_type">
+    <property name="geometry">
+     <rect>
+      <x>730</x>
+      <y>100</y>
+      <width>131</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <item>
+     <property name="text">
+      <string>Action Result</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QPushButton" name="pushButton_filter_apply">
+    <property name="geometry">
+     <rect>
+      <x>900</x>
+      <y>100</y>
+      <width>111</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Filter Apply</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_filter_reset">
+    <property name="geometry">
+     <rect>
+      <x>1020</x>
+      <y>100</y>
+      <width>111</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Filter Reset</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QTableWidget" name="tableWidget">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>190</y>
+     <width>741</width>
+     <height>601</height>
+    </rect>
+   </property>
+   <property name="editTriggers">
+    <set>QAbstractItemView::NoEditTriggers</set>
+   </property>
+   <property name="alternatingRowColors">
+    <bool>true</bool>
+   </property>
+   <property name="selectionMode">
+    <enum>QAbstractItemView::SingleSelection</enum>
+   </property>
+   <property name="selectionBehavior">
+    <enum>QAbstractItemView::SelectRows</enum>
+   </property>
+   <property name="sortingEnabled">
+    <bool>true</bool>
+   </property>
+   <property name="columnCount">
+    <number>30</number>
+   </property>
+   <column>
+    <property name="text">
+     <string>Case ID</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Case Closed</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Ignored</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Case Type</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Detection Type</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Start Time</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>End Time</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Robot ID</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>User Name</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Location</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Reported to 119</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Reported to 112</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Illegal</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Danger</string>
+    </property>
+   </column>
+   <column>
+    <property name="text">
+     <string>Emergency</string>
+    </property>
+   </column>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+   <column/>
+  </widget>
+  <widget class="QGroupBox" name="groupBox_details">
+   <property name="geometry">
+    <rect>
+     <x>760</x>
+     <y>170</y>
+     <width>421</width>
+     <height>621</height>
+    </rect>
+   </property>
+   <property name="title">
+    <string>details</string>
+   </property>
+   <widget class="QWidget" name="widget_case_detail_video" native="true">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>80</y>
+      <width>401</width>
+      <height>281</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_stop">
+    <property name="geometry">
+     <rect>
+      <x>40</x>
+      <y>430</y>
+      <width>71</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>■</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_run">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>430</y>
+      <width>71</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>▶</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_seek_forward">
+    <property name="geometry">
+     <rect>
+      <x>310</x>
+      <y>430</y>
+      <width>71</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>▶▶</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="pushButton_seek_backward">
+    <property name="geometry">
+     <rect>
+      <x>130</x>
+      <y>430</y>
+      <width>71</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>◀◀</string>
+    </property>
+   </widget>
+   <widget class="QSlider" name="horizontalSlider_volume">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>470</y>
+      <width>160</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_volume">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>470</y>
+      <width>66</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Volume</string>
+    </property>
+   </widget>
+   <widget class="QSlider" name="horizontalSlider_running_time">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>370</y>
+      <width>361</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="orientation">
+     <enum>Qt::Horizontal</enum>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_running_time">
+    <property name="geometry">
+     <rect>
+      <x>160</x>
+      <y>400</y>
+      <width>231</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Running Time</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_media_status">
+    <property name="geometry">
+     <rect>
+      <x>40</x>
+      <y>400</y>
+      <width>111</width>
+      <height>19</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Media Status</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QLabel" name="label_number_of_log">
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>170</y>
+     <width>341</width>
+     <height>19</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Number Of Log</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

@@ -1,0 +1,527 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="windowModality">
+   <enum>Qt::NonModal</enum>
+  </property>
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1190</width>
+    <height>802</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">/* 전체 배경 및 폰트 */
+QWidget {
+    background-color: #e9f6fe;
+    font-family: &quot;Segoe UI&quot;, &quot;맑은 고딕&quot;, sans-serif;
+    font-size: 14px;
+    color: #222;
+}
+
+/* 탭 스타일 */
+QTabWidget::pane {
+    border: none;
+    background-color: #e9f6fe;
+}
+
+QTabBar::tab {
+    background: #d4f4e6;  /* 비활성 탭: 연한 녹색 */
+    border: 1px solid #aad4f5;
+    border-bottom: none;
+    padding: 6px 20px;
+    min-width: 130px;
+    font-weight: bold;
+    color: #006666;
+    text-align: center;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+QTabBar::tab:selected {
+    background: #2196f3;  /* 활성 탭: 진한 파랑 */
+    color: white;
+}
+
+/* 그룹박스 스타일 */
+QGroupBox {
+    border: 1px solid #cce7f6;
+    border-radius: 5px;
+    font-weight: bold;
+    color: #005b99;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 4px;
+}
+
+/* 라벨 */
+QLabel {
+    font-size: 14px;
+    color: #222;
+}
+#robot_location, #robot_status, #detections {
+    font-weight: bold;
+    background-color: transparent;
+}
+#label_user_name {
+    font-weight: bold;
+    border: none;
+    font-size: 18px;
+}
+#live_feed_label, #map_display_label, #detection_image {
+    border: 1px solid #b3d9ff;
+    border-radius: 6px;
+}
+
+/* 로그 출력 박스 */
+#textEdit_log_box {
+    background-color: white;
+}
+
+/* 버튼 */
+QPushButton {
+    background-color: #4db8ff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #33aaff;
+}
+QPushButton:pressed {
+    background-color: #2196f3;
+}
+QPushButton:disabled {
+    background-color: #d0eafc;  /* 연한 하늘색 (비활성화 배경) */
+    color: #9bbcd1;             /* 흐릿한 회청색 텍스트 */
+}
+
+/* 콤보박스 */
+QComboBox {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 90px;
+}
+
+/* 날짜/시간 선택기 */
+QDateTimeEdit {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* 테이블 */
+QTableWidget {
+    background-color: white;
+    border: 1px solid #aad4f5;
+    gridline-color: #aad4f5;
+}
+QHeaderView::section {
+    background-color: #d0eafc;
+    font-weight: bold;
+    padding: 6px;
+    border: 1px solid #aad4f5;
+}
+
+/* 슬라이더 */
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #cce7f6;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #4db8ff;
+    width: 12px;
+    border-radius: 6px;
+}
+</string>
+  </property>
+  <widget class="QWidget" name="widget" native="true">
+   <property name="enabled">
+    <bool>true</bool>
+   </property>
+   <property name="geometry">
+    <rect>
+     <x>10</x>
+     <y>10</y>
+     <width>701</width>
+     <height>791</height>
+    </rect>
+   </property>
+   <property name="acceptDrops">
+    <bool>false</bool>
+   </property>
+   <property name="autoFillBackground">
+    <bool>false</bool>
+   </property>
+   <widget class="QGroupBox" name="live">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>681</width>
+      <height>461</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="title">
+     <string>Live</string>
+    </property>
+    <widget class="QLabel" name="live_feed_label">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>661</width>
+       <height>431</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>Live Image</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QGroupBox" name="Logs">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>490</y>
+      <width>681</width>
+      <height>291</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="title">
+     <string>Logs</string>
+    </property>
+    <widget class="QTextEdit" name="textEdit_log_box">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>30</y>
+       <width>661</width>
+       <height>251</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </widget>
+  </widget>
+  <widget class="QWidget" name="widget_2" native="true">
+   <property name="geometry">
+    <rect>
+     <x>720</x>
+     <y>10</y>
+     <width>471</width>
+     <height>791</height>
+    </rect>
+   </property>
+   <widget class="QGroupBox" name="map">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>300</y>
+      <width>441</width>
+      <height>341</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="title">
+     <string>Map</string>
+    </property>
+    <widget class="QLabel" name="map_display_label">
+     <property name="geometry">
+      <rect>
+       <x>12</x>
+       <y>20</y>
+       <width>421</width>
+       <height>311</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>Map Image</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="detections">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>200</y>
+       <width>181</width>
+       <height>131</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>Segoe UI</family>
+       <pointsize>-1</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>detections</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignBottom|Qt::AlignHCenter</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="robot_location">
+     <property name="geometry">
+      <rect>
+       <x>190</x>
+       <y>280</y>
+       <width>131</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>Segoe UI</family>
+       <pointsize>-1</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>robot_location</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignBottom|Qt::AlignHCenter</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="robot_status">
+     <property name="geometry">
+      <rect>
+       <x>320</x>
+       <y>280</y>
+       <width>111</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>Segoe UI</family>
+       <pointsize>-1</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>robot_status</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignBottom|Qt::AlignHCenter</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QGroupBox" name="recent_event_image">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>441</width>
+      <height>291</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="title">
+     <string>Recent Event Image</string>
+    </property>
+    <widget class="QLabel" name="detection_image">
+     <property name="geometry">
+      <rect>
+       <x>10</x>
+       <y>20</y>
+       <width>421</width>
+       <height>261</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>Recent Event Image</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QGroupBox" name="response_commands">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>650</y>
+      <width>441</width>
+      <height>131</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="title">
+     <string>Response Commands</string>
+    </property>
+    <widget class="QPushButton" name="btn_danger">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>80</y>
+       <width>131</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Danger</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_fire_report">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>30</y>
+       <width>131</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>119 Report</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_police_report">
+     <property name="geometry">
+      <rect>
+       <x>160</x>
+       <y>30</y>
+       <width>131</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>112 Report</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_emergency">
+     <property name="geometry">
+      <rect>
+       <x>160</x>
+       <y>80</y>
+       <width>131</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Emergency</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_case_closed">
+     <property name="geometry">
+      <rect>
+       <x>300</x>
+       <y>30</y>
+       <width>131</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Case Closed</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="btn_illegal">
+     <property name="geometry">
+      <rect>
+       <x>300</x>
+       <y>80</y>
+       <width>131</width>
+       <height>41</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Illegal</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QLabel" name="label_user_name">
+    <property name="geometry">
+     <rect>
+      <x>350</x>
+      <y>-10</y>
+      <width>101</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string notr="true"/>
+    </property>
+    <property name="text">
+     <string>user_name</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QPushButton" name="btn_start_video_stream">
+   <property name="geometry">
+    <rect>
+     <x>530</x>
+     <y>0</y>
+     <width>165</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Start Video Stream</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

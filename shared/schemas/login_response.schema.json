@@ -1,0 +1,32 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Login Response",
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "사용자 ID",
+            "minLength": 1
+        },
+        "name": {
+            "type": "string",
+            "description": "사용자 이름",
+            "minLength": 1
+        },
+        "result": {
+            "type": "string",
+            "enum": [
+                "succeed",
+                "id_error",
+                "password_error"
+            ],
+            "description": "로그인 결과"
+        }
+    },
+    "required": [
+        "id",
+        "name",
+        "result"
+    ],
+    "additionalProperties": false
+}

@@ -1,0 +1,58 @@
+{
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "title": "Frame Detection Result",
+   "type": "object",
+   "properties": {
+      "frame_id": {
+         "type": "integer",
+         "description": "프레임 고유 ID",
+         "minimum": 0
+      },
+      "timestamp": {
+         "type": "string",
+         "format": "date-time",
+         "description": "프레임 생성 시각 (ISO 8601 형식)"
+      },
+      "detections": {
+         "type": "array",
+         "description": "객체 탐지 결과 리스트",
+         "items": {
+            "type": "object",
+            "properties": {
+               "label": {
+                  "type": "string",
+                  "enum": ["knife", "gun", "lying_down", "cigarette"],
+                  "description": "탐지된 객체 라벨"
+               },
+               "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "description": "신뢰도 (0~1 사이)"
+               },
+               "box": {
+                  "type": "array",
+                  "items": {
+                     "type": "integer"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "description": "[x1, y1, x2, y2] 좌표"
+               }
+            },
+            "required": [
+               "label",
+               "confidence",
+               "box"
+            ],
+            "additionalProperties": false
+         }
+      }
+   },
+   "required": [
+      "frame_id",
+      "timestamp",
+      "detections"
+   ],
+   "additionalProperties": false
+}

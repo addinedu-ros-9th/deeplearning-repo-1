@@ -1,0 +1,22 @@
+{
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "title": "Frame Image Packet",
+   "type": "object",
+   "properties": {
+      "frame_id": {
+         "type": "integer",
+         "description": "프레임 고유 ID",
+         "minimum": 0
+      },
+      "timestamp": {
+         "type": "string",
+         "format": "date-time",
+         "description": "프레임 생성 시각 (ISO 8601 형식)"
+      }
+   },
+   "required": [
+      "frame_id",
+      "timestamp"
+   ],
+   "additionalProperties": false
+}

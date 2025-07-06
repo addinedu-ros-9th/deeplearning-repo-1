@@ -1,0 +1,97 @@
+{
+   "$schema": "http://json-schema.org/draft-07/schema#",
+   "title": "Case Log Insert",
+   "type": "object",
+   "properties": {
+      "logs": {
+         "type": "array",
+         "description": "상황 기록 리스트",
+         "items": {
+            "type": "object",
+            "properties": {
+               "case_id": {
+                  "type": "integer",
+                  "minimum": 0
+               },
+               "case_type": {
+                  "type": "string",
+                  "enum": ["danger", "emergency", "illegal"]
+               },
+               "detection_type": {
+                  "type": "string",
+                  "enum": ["knife", "gun", "lying_down", "cigarette"]
+               },
+               "robot_id": {
+                  "type": "string",
+                  "enum": ["ROBOT001"]
+               },
+               "user_id": {
+                  "type": "string"
+               },
+               "location": {
+                  "type": "string",
+                  "enum": ["A", "B", "BASE"]
+               },
+               "is_ignored": {
+                  "type": "integer",
+                  "enum": [0, 1]
+               },
+               "is_119_reported": {
+                  "type": "integer",
+                  "enum": [0, 1]
+               },
+               "is_112_reported": {
+                  "type": "integer",
+                  "enum": [0, 1]
+               },
+               "is_illeal_warned": {
+                  "type": "integer",
+                  "enum": [0, 1]
+               },
+               "is_danger_warned": {
+                  "type": "integer",
+                  "enum": [0, 1]
+               },
+               "is_emergency_warned": {
+                  "type": "integer",
+                  "enum": [0, 1]
+               },
+               "is_case_closed": {
+                  "type": "integer",
+                  "enum": [0, 1]
+               },
+               "start_time": {
+                  "type": "string",
+                  "format": "date-time"
+               },
+               "end_time": {
+                  "type": "string",
+                  "format": "date-time"
+               }
+            },
+            "required": [
+               "case_id",
+               "case_type",
+               "detection_type",
+               "robot_id",
+               "user_id",
+               "location",
+               "is_ignored",
+               "is_119_reported",
+               "is_112_reported",
+               "is_illeal_warned",
+               "is_danger_warned",
+               "is_emergency_warned",
+               "is_case_closed",
+               "start_time",
+               "end_time"
+            ],
+            "additionalProperties": false
+         }
+      }
+   },
+   "required": [
+      "logs"
+   ],
+   "additionalProperties": false
+}
