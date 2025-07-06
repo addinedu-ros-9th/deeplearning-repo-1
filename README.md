@@ -23,7 +23,7 @@
 # 1. 프로젝트 소개
 > ⏰ 프로젝트 기간: 2025.05.22 ~ 2025.07.02
 <p align="center">
-  <img src="image.png" width="500"/>
+  <img src="readme/image.png" width="500"/>
 </p>
 
 
@@ -38,17 +38,17 @@
 
 ## 시스템 아키텍쳐
 <p align="center">
-  <img src="image-1.png" width="500"/>
+  <img src="readme/image-1.png" width="500"/>
 </p>
 
 ## ER 다이어그램
 <p align="center">
-  <img src="image-2.png" width="500"/>
+  <img src="readme/image-2.png" width="500"/>
 </p>
 
 ## State 다이어그램
 <p align="center">
-  <img src="image-3.png" width="300"/>
+  <img src="readme/image-3.png" width="300"/>
 </p>
 
 **디렉토리 구조**
@@ -86,11 +86,11 @@
 # 4. 핵심 기술
 ## 감지 모델 & 사건 종류
 
-| 항목     | 모델             | 조건                            | 자료 이미지          |
-|----------|------------------|----------------------------------|---------------------|
-| 칼/총       | YOLO Segmentation | 2초 이내 40% 프레임 이상 감지   | ![gun_test](readme/core_techs_1.png) ![gun_test](readme/core_techs_2.png)    |
-| 담배     | YOLO Detection    | 2초 이내 40% 프레임 이상 감지   | ![gun_test](readme/core_techs_4.png) ![gun_test](readme/core_techs_3.png)          |
-| 쓰러짐   | YOLO Pose         | 2초 이내 40% 프레임 이상 감지   | ![gun_test](readme/core_techs_8.png) ![gun_test](readme/core_techs_7.png)|
+| 종류    | 모델           | 자료 이미지          |
+|----------|-----------------|---------------------|
+| 칼/총       | YOLO Segmentation |  ![gun_test](readme/core_techs_1.png) ![gun_test](readme/core_techs_2.png)    |
+| 담배     | YOLO Detection    |  ![gun_test](readme/core_techs_4.png) ![gun_test](readme/core_techs_3.png)          |
+| 쓰러짐   | YOLO Pose         |  ![gun_test](readme/core_techs_8.png) ![gun_test](readme/core_techs_7.png)|
 
 
 
