@@ -1,6 +1,6 @@
 # 핵심 의존성
 numpy>=1.19.5
-opencv-python>=4.5.5
+opencv-contrib-python
 PyQt5>=5.15.6
 python-vlc>=3.0.16120
 jsonschema>=4.4.0
