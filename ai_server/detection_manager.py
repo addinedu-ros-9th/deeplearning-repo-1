@@ -32,13 +32,13 @@ class DetectionManager:
         self.sender_tcp_port = sender_tcp_port
         self.udp_port = udp_port
 
-        self.yolo_detector = YOLODetector() # Yolo 디텍터 
+        self.yolo_detector = YOLODetector() # # YOLO 객체 탐지기, 총, 칼
         # self.mediapipe_detector = MediaPipeDetector()  # MediaPipe 디텍터 추가
         self.yolo_pose_detector = YOLOPoseDetector()
 
         self.send_queue = Queue()  # TCP로 보낼 예측 결과 저장
         self.tcp_socket = None
-        self.tcp_lock = threading.Lock()
+        self.tcp_lock = threading.Lock() # TCP 소켓 보호용 Lock
         self.recv_time_queue = Queue()  # 수신 시간 전용
 
         self.recv_time_map = {}  # frame_id → recv_time 저장
@@ -50,17 +50,17 @@ class DetectionManager:
         while True:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(5.0)
+                    sock.settimeout(5.0) # 연결 타임아웃 설정
                     sock.connect((self.sender_host, self.sender_tcp_port))
                     self.tcp_socket = sock
                     print(f"[TCP] sender에 연결됨: {self.sender_host}:{self.sender_tcp_port}", flush=True)
 
                     while True:
                         try:
-                            response = self.send_queue.get()  # 큐에서 꺼냄
-                            data = json.dumps(response).encode()
-                            length_prefix = struct.pack("!I", len(data))
-                            sock.sendall(length_prefix + data + b'\n')
+                            response = self.send_queue.get()  # 예측 결과 큐에서 꺼냄
+                            data = json.dumps(response).encode() # JSON 직렬화
+                            length_prefix = struct.pack("!I", len(data)) # 길이 프리픽스
+                            sock.sendall(length_prefix + data + b'\n') # 데이터 전송
 
                             print(f"[TCP 전송] json = {response}")
                             # print(f"[TCP 전송] 데이터 길이={[len(data)]}, frame_id={response['frame_id']}, 객체={len(response['detections'])}건", flush=True)
@@ -98,17 +98,18 @@ class DetectionManager:
         print(f"-----------------------------------------------------")
         print(f"[UDP] 이미지 수신 대기 중 (포트 {self.udp_port})")
 
-        last_frame_id = -1
+        last_frame_id = -1 # 중복 수신 방지용
 
         while True:
             try:
-                data, _ = sock.recvfrom(65535)
+                data, _ = sock.recvfrom(65535) # 최대 크기 수신
                 # print(f"[UDP 수신] 총 데이터 길이: {len(data)} bytes", flush=True)
-                recv_time = time.time()
+                recv_time = time.time() # 수신 시간 기록
                 
 
                 self.recv_time_queue.put(recv_time) # 이미지 받은 시간 저장
 
+                # JSON 헤더 추출
                 json_end = data.find(b'}') + 1
                 if json_end == 0:
                     print("[UDP] JSON 헤더 파싱 실패")
@@ -136,12 +137,13 @@ class DetectionManager:
                 # cv2.imshow("UDP Frame", frame)
                 # cv2.waitKey(1)
 
-                # YOLO 예측
+                # YOLO 예측, 총, 칼 탕지
                 yolo_result = self.yolo_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.65)
 
-                # MediaPipe 예측
+                # MediaPipe 예측 현재는 사용X
                 # mediapipe_result = self.mediapipe_detector.predict_raw(frame_id, timestamp, jpeg_bytes)
-                # POSE 에측
+                
+                # POSE 에측, 쓰러짐, 담배 탐지
                 pose_result = self.yolo_pose_detector.predict_raw(frame_id, timestamp, jpeg_bytes, 0.5)
 
                 # 결과 병합
@@ -152,11 +154,10 @@ class DetectionManager:
                 }
                 
 
-                # 큐에 병합 결과 추가
+                # TCP 전송 큐에 병합 결과 추가
                 self.send_queue.put(merged_result)
                 print("-----------------------------------------------------")
                 print(f"[✅ 수신] 1. ImageManager → Dectection_manager: frame_id={frame_id}, timestamp={timestamp}, all_size={len(data)} bytes")
-                # print(f"[UDP 수신] frame_id={frame_id}, 객체={len(response['detections'])}건", flush=True)
 
             except Exception as e:
                 print("[UDP 처리 오류]", e)
@@ -171,6 +172,7 @@ class DetectionManager:
 
 
 if __name__ == "__main__":
+    # 매니저 생성 및 실행
     manager = DetectionManager(
         sender_host=HOST_IP,
         sender_tcp_port=TCP_PORT,

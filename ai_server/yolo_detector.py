@@ -22,7 +22,7 @@ from torch.nn import Upsample
 from ultralytics.nn.modules.block import DFL
 from ultralytics.nn.modules.block import Proto
 
-
+# ✅ torch serialization 보안 제한 우회 - 사용자 정의 계층 허용
 add_safe_globals({
     DFL: DFL, 
     DetectionModel: DetectionModel,
@@ -37,7 +37,7 @@ add_safe_globals({
     Concat: Concat,
     SPPF: SPPF,
     Sequential: Sequential,
-    Conv2d: Conv2d , # ✅ NEW!
+    Conv2d: Conv2d , 
     BatchNorm2d: BatchNorm2d,
     SiLU: SiLU,
     ModuleList: ModuleList,
@@ -51,18 +51,27 @@ add_safe_globals({
 
 
 class YOLODetector:
-    # def __init__(self, model_path='yolov8n-seg.pt'):
+    # 초기화: YOLO 모델 로드
     def __init__(self, model_path='best_gun_knife.pt'):
         self.model = YOLO(model_path)
         print("[YOLODetector] 모델 로드 완료")
 
     def predict_raw(self, frame_id, timestamp, jpeg_bytes, conf_thresh=0.5):
+        """
+        JPEG 이미지 바이트 입력 받아 YOLO 예측 수행 후 결과 반환
+        - frame_id, timestamp: 추적용 메타정보
+        - jpeg_bytes: JPEG 압축된 이미지 바이트
+        - conf_thresh: 탐지 신뢰도 임계값
+        """
         try:
             # JPEG → 이미지
             nparr = np.frombuffer(jpeg_bytes, np.uint8)
             frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
+            # 모델 추론 
             result = self.model(frame, verbose=False)[0]
+
+            # 디버그 코드
             # result = self.model.predict(source=frame, verbose=False)[0]
             # print(f"[디버그] 모델 예측 결과 result: {result}")
             # print(f"[디버그] result.boxes: {result.boxes}")
@@ -75,9 +84,9 @@ class YOLODetector:
                 if conf < conf_thresh:
                     continue  # 일정 conf 미만은 제외
                 
-                cls_id = int(box.cls[0])
-                label = self.model.names[cls_id]
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                cls_id = int(box.cls[0]) # 클래스 ID
+                label = self.model.names[cls_id] # 클래스 이름
+                x1, y1, x2, y2 = map(int, box.xyxy[0]) # 바운딩 박스 좌표
 
                 detections.append({
                     "label": label,
@@ -91,6 +100,7 @@ class YOLODetector:
                 "detections": detections
             }
         except Exception as e:
+            # 예측 중 오류 발생 시 빈 결과 반환
             # print("[YOLODetector] 예측 오류:", e)
             return {
                 "frame_id": frame_id,
@@ -99,7 +109,7 @@ class YOLODetector:
             }
 
 
-# 아래는 독립 실행용 테스트 코드입니다. detector_manager 통합 시 제거 가능
+# 아래는 독립 실행용 테스트 코드입니다. detector_manager 없이 단독 테스트 시 사용
 if __name__ == "__main__":
     import socket
     import threading

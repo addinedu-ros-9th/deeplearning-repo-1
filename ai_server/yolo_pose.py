@@ -10,7 +10,6 @@ class YOLOPoseDetector:
 
         self.box_model = YOLO("best_cigar.pt")  # box 탐지용 모델
         self.box_names = self.box_model.names
-        # self.conf = 0.5
 
         print(f"[YOLOPoseDetector] 모델 로드 완료: {model_path}")
 
@@ -37,11 +36,12 @@ class YOLOPoseDetector:
                     for box in r.boxes:
                         conf = float(box.conf[0].item())
                         if conf < conf_thresh:
-                            continue  # 필터링
+                            continue  # 일정 conf 이하 필터링
 
-                        cls_id = int(box.cls[0].item())
-                        label = self.box_names[cls_id]
-                        x1, y1, x2, y2 = box.xyxy[0].tolist()
+                        cls_id = int(box.cls[0].item()) # 클래스 ID
+                        label = self.box_names[cls_id] # 클레스 이름
+                        x1, y1, x2, y2 = box.xyxy[0].tolist()  # 바운딩 박스 좌표
+
                         detections.append({
                             'label': label,
                             'box': [x1, y1, x2, y2],
@@ -55,17 +55,18 @@ class YOLOPoseDetector:
                     box = boxes[i]
                     conf = float(box.conf[0].item())
                     if conf < conf_thresh:
-                            continue  # 필터링
+                            continue  # 일정 conf 이하 필터링
                     
                     
-                    cls_id = int(box.cls[0].item())
-                    label = self.names[cls_id]  # 예: 'fall', 'stand', 'sit'
+                    cls_id = int(box.cls[0].item()) # 클래스 ID
+                    label = self.names[cls_id]  # 클레스 이름, lying_down, fall_down, 현재는 lying_down만 사용
                     if label not in ["lying_down", "fall_down"]:
                         continue  # 이외의 포즈는 무시
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    x1, y1, x2, y2 = box.xyxy[0].tolist()  # 바운딩 박스 좌표
+
 
                     detections.append({
-                        'label': label,  # YOLO pose는 기본적으로 사람만 탐지
+                        'label': label,  
                         'box': [x1, y1, x2, y2],
                         'confidence': conf
                     })
@@ -77,6 +78,7 @@ class YOLOPoseDetector:
                 }
     
         except Exception as e:
+            # 예측 중 오류 발생 시 빈 결과 반환
             # print("[YOLODetector] 예측 오류:", e)
             return {
                 "frame_id": frame_id,
